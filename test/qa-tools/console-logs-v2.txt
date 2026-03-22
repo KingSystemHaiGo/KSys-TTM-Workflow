@@ -1,0 +1,16 @@
+[warn] [FloatingActionButton] DOM 尚未创建，延迟渲染
+[warn] [FloatingActionButton] DOM 尚未创建，延迟渲染
+[log] [MultiDebug] Extension initialized
+[log] [UrhoX] ✓ Env: production
+[log] [UrhoX] ✓ Project: p_qhod
+[error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[log] [UrhoX] ✓ All files downloaded
+[log] [UrhoX] ✓ Engine JS executed
+[log] [UrhoX] === preRun ===
+[log] [UrhoX] Final Module.arguments: [array Array]
+[log] [UrhoX] Canvas size OK: 1280x720
+[log] [2026-03-22 18_30_35_955][0] INFO: DownloadManager initialized
+[log] [2026-03-22 18_30_35_975][0] INFO: a couple of Subsystems registered finish.
+[log] [2026-03-22 18_30_35_976][0] INFO: Engine construct finish.
+[log] [2026-03-22 18_30_35_987][0] WARNING: Graphics::SetMode called with zero dimensions: 0x0 (will maximize window)
+[PAGEERROR] Cannot read properties of undefined (reading 'getParameter')

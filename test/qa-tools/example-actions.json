@@ -1,0 +1,28 @@
+{
+  "description": "示例：测试主菜单点击和键盘交互",
+  "viewport": { "width": 1280, "height": 720 },
+  "waitForEngine": 25,
+  "actions": [
+    { "type": "screenshot", "name": "01-initial" },
+
+    { "type": "click", "x": 640, "y": 360 },
+    { "type": "wait", "duration": 1 },
+    { "type": "screenshot", "name": "02-after-center-click" },
+
+    { "type": "key", "key": "Escape" },
+    { "type": "wait", "duration": 0.5 },
+    { "type": "screenshot", "name": "03-after-escape" },
+
+    { "type": "log-snapshot", "name": "mid-test" },
+
+    { "type": "mouse-drag", "fromX": 200, "fromY": 300, "toX": 600, "toY": 300, "steps": 15 },
+    { "type": "wait", "duration": 1 },
+    { "type": "screenshot", "name": "04-after-drag" },
+
+    { "type": "key", "key": "Space" },
+    { "type": "wait", "duration": 2 },
+    { "type": "screenshot", "name": "05-after-space" },
+
+    { "type": "log-snapshot", "name": "final" }
+  ]
+}

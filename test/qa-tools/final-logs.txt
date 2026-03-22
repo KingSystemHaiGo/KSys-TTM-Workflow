@@ -1,0 +1,223 @@
+[FloatingActionButton] DOM 尚未创建，延迟渲染
+[FloatingActionButton] DOM 尚未创建，延迟渲染
+[MultiDebug] Extension initialized
+[UrhoX] ✓ Env: production
+Failed to load resource: the server responded with a status of 404 (Not Found)
+[UrhoX] ✓ Project: p_qhod
+[UrhoX] ✓ All files downloaded
+[UrhoX] ✓ Engine JS executed
+[UrhoX] === preRun ===
+[UrhoX] Final Module.arguments: [array Array]
+[UrhoX] Canvas size OK: 1280x720
+[2026-03-22 18_32_46_156][0] INFO: DownloadManager initialized
+[2026-03-22 18_32_46_164][0] INFO: a couple of Subsystems registered finish.
+[2026-03-22 18_32_46_164][0] INFO: Engine construct finish.
+[2026-03-22 18_32_46_175][0] WARNING: Graphics::SetMode called with zero dimensions: 0x0 (will maximize window)
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat when EXT_texture_norm16 is not enabled
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat when EXT_texture_norm16 is not enabled
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat when EXT_texture_norm16 is not enabled
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid internalformat
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getInternalformatParameter: invalid target
+WebGL: INVALID_ENUM: getParameter: invalid parameter name
+[2026-03-22 18_32_46_344][0] WARNING: Could not get application preferences directory
+The ScriptProcessorNode is deprecated. Use AudioWorkletNode instead. (https://bit.ly/audio-worklet)
+[UrhoX] === postRun: Engine ready ===
+[2026-03-22 18_32_47_495][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Startup Failed", language="zh_CN"
+[2026-03-22 18_32_47_496][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Warning", language="zh_CN"
+[2026-03-22 18_32_47_496][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Loading Failed", language="zh_CN"
+[2026-03-22 18_32_47_496][34] WARNING: Localization::LoadJSON(source): override translation, string ID="OK", language="zh_CN"
+[2026-03-22 18_32_47_496][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Retry", language="zh_CN"
+[2026-03-22 18_32_47_496][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Exit", language="zh_CN"
+[2026-03-22 18_32_47_497][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Preparing direct connection...", language="zh_CN"
+[2026-03-22 18_32_47_497][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Connecting to server...", language="zh_CN"
+[2026-03-22 18_32_47_497][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Connected!", language="zh_CN"
+[2026-03-22 18_32_47_497][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Retrying connection...", language="zh_CN"
+[2026-03-22 18_32_47_499][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Initializing...", language="zh_CN"
+[2026-03-22 18_32_47_499][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Verifying account...", language="zh_CN"
+[2026-03-22 18_32_47_499][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Connection lost, reconnecting...", language="zh_CN"
+[2026-03-22 18_32_47_499][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Connection failed, retrying...", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Login successful!", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Refreshing login...", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Please scan QR code...", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Authenticating...", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Waiting for login...", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Checking version...", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Loading resources...", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Login verification...", language="zh_CN"
+[2026-03-22 18_32_47_500][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Ready...", language="zh_CN"
+[2026-03-22 18_32_47_502][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Parsing version...", language="zh_CN"
+[2026-03-22 18_32_47_502][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Loading manifest...", language="zh_CN"
+[2026-03-22 18_32_47_502][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Parsing manifest...", language="zh_CN"
+[2026-03-22 18_32_47_502][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Initializing resource system...", language="zh_CN"
+[2026-03-22 18_32_47_503][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Creating resource router...", language="zh_CN"
+[2026-03-22 18_32_47_503][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Adding cache directory...", language="zh_CN"
+[2026-03-22 18_32_47_503][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Downloading project.json...", language="zh_CN"
+[2026-03-22 18_32_47_503][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Checking project info...", language="zh_CN"
+[2026-03-22 18_32_47_503][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Fetching minigame data...", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Preparing package download...", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Downloading", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Extracting", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Checking resources...", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Calculating project size...", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Calculating size", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Cleaning up...", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Cleaning", language="zh_CN"
+[2026-03-22 18_32_47_504][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Loading", language="zh_CN"
+[2026-03-22 18_32_47_505][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Ready", language="zh_CN"
+[2026-03-22 18_32_47_505][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Completed", language="zh_CN"
+[2026-03-22 18_32_47_505][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Your account has logged in elsewhere.
+This session will exit.", language="zh_CN"
+[2026-03-22 18_32_47_507][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Loading startup...", language="zh_CN"
+[2026-03-22 18_32_47_507][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Configuring pipeline...", language="zh_CN"
+[2026-03-22 18_32_47_507][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Failed to download startup resources: ", language="zh_CN"
+[2026-03-22 18_32_47_508][34] WARNING: Localization::LoadJSON(source): override translation, string ID="engine-startup source not found in sourceManifests. Ensure engine-startup is published to CDN and engine-res source exists.", language="zh_CN"
+[2026-03-22 18_32_47_508][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Cannot resolve entry script", language="zh_CN"
+[2026-03-22 18_32_47_508][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Failed to create Startup Lua VM", language="zh_CN"
+[2026-03-22 18_32_47_508][34] WARNING: Localization::LoadJSON(source): override translation, string ID="Failed to execute startup script: ", language="zh_CN"
+[2026-03-22 18_32_47_508][34] WARNING: Localization::LoadJSON(source): override translation, string ID="OnPipelineConfigure() failed in startup script", language="zh_CN"
+[2026-03-22 18_32_48_497][67] WARNING: Next log has been output too many times and will not be output again.
+开始创建网络管理
+结束创建网络管理
+创建WebNetwork the key: 1
+WebNetwork创建成功
+开始连接服务器
+ws://entrance-new-pd.spark.xd.com:1002/
+已经向服务器发送连接请求
+WebSocket connection to 'ws://entrance-new-pd.spark.xd.com:1002/' failed: Establishing a tunnel via proxy server failed.
+捕捉到错误信息... [object Event]
+[2026-03-22 18_32_50_532][117] WARNING: ConnectError in WASM [1: connected failed.], skipping login
+与服务器的连接断开... [object CloseEvent]
+[UrhoX] Loading screen hidden
+[2026-03-22 18_32_51_556][147][Script] IsNetworkMode:    false
+[2026-03-22 18_32_51_579][147][Script] [InputAdaptor] Loading input event adaptor...
+[2026-03-22 18_32_51_580][147][Script] [InputAdaptor] Hooked SubscribeToEvent for event mapping.
+[2026-03-22 18_32_51_580][147][Script] [InputAdaptor] Platform: Web, isTouchPlatform: false
+[2026-03-22 18_32_51_580][147][Script] [InputAdaptor] Hooked Input methods for touch emulation fallback.
+[2026-03-22 18_32_51_598][147][Script] Check Transition.lua SimpleGrid.lua
+[2026-03-22 18_32_51_624][147] WARNING: userId is 0, savedata will not be per-user isolated
+[2026-03-22 18_32_52_240][147][Script] [UI] Root widget pointerEvents auto-set to "box-none" (prevents root from blocking game input). Set pointerEvents explicitly to suppress this message.
+[2026-03-22 18_32_52_252][147][Script] [PageHome] onEnter
+[2026-03-22 18_32_52_252][147][Script] [main] 人生模拟器启动完成

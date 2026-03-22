@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-03-22T10:35:20.676Z",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "browserVersion": "Chrome/146.0.7680.153",
+  "screenshots": [
+    {
+      "file": "shot-1.png",
+      "size": 29760,
+      "time": "2026-03-22T10:35:09.180Z"
+    },
+    {
+      "file": "shot-2.png",
+      "size": 29760,
+      "time": "2026-03-22T10:35:14.970Z"
+    },
+    {
+      "file": "shot-3.png",
+      "size": 29760,
+      "time": "2026-03-22T10:35:20.676Z"
+    }
+  ],
+  "engineEvents": [
+    "[UrhoX] ✓ Env: production",
+    "[UrhoX] ✓ Project: p_qhod",
+    "[UrhoX] ✓ All files downloaded",
+    "[UrhoX] ✓ Engine JS executed",
+    "[UrhoX] === preRun ===",
+    "[UrhoX] Final Module.arguments: [array Array]",
+    "[UrhoX] Canvas size OK: 1280x720",
+    "[2026-03-22 18_34_53_136][0] INFO: DownloadManager initialized",
+    "[2026-03-22 18_34_53_144][0] INFO: a couple of Subsystems registered finish.",
+    "[2026-03-22 18_34_53_145][0] INFO: Engine construct finish.",
+    "[UrhoX] === postRun: Engine ready ===",
+    "[UrhoX] Loading screen hidden"
+  ],
+  "errorCount": 0,
+  "errors": [],
+  "logCount": 223
+}

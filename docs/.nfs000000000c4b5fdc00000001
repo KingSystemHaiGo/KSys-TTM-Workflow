@@ -1,0 +1,1820 @@
+# Lua QA 工具链指南
+
+> **集成式质量保障工具链**：静态诊断 → 分辨率扫描 → Dry-Run 沙箱 → Headless 截图 → 预览窗口。
+> 从代码提交到最终验收，每一层用最低成本捕获最多问题。
+> 可独立用于任何基于 UrhoX Lua 的项目。
+
+---
+
+## 目录
+
+1. [概述](#1-概述)
+2. [测试前必读：选择测试级别](#2-测试前必读选择测试级别)
+3. [环境准备](#3-环境准备)
+4. [技术架构](#4-技术架构)
+5. [Mock 引擎 API](#5-mock-引擎-api)
+6. [测试层级详解](#6-测试层级详解)
+   - 6.1 [L1 冒烟测试 — 加载 + 启动](#61-l1-冒烟测试--加载--启动)
+   - 6.2 [L2 结构验证 — 界面注册 + 系统接口 + 帧模拟](#62-l2-结构验证--界面注册--系统接口--帧模拟)
+   - 6.3 [L3 业务逻辑 — 状态变更 + 规则断言 + 回归用例](#63-l3-业务逻辑--状态变更--规则断言--回归用例)
+   - 6.4 [L4 端到端 — 完整玩家流程模拟](#64-l4-端到端--完整玩家流程模拟)
+7. [自适应测试框架（L1-L2 自动化）](#7-自适应测试框架l1-l2-自动化)
+8. [检测能力与局限性](#8-检测能力与局限性)
+9. [lua-language-server 静态诊断（第零道门禁）](#9-lua-language-server-静态诊断第零道门禁)
+10. [多分辨率安全扫描（静态分析）](#10-多分辨率安全扫描静态分析)
+11. [实战踩坑记录](#11-实战踩坑记录)
+   - 11.5 [L3 Mock 精细化：从「能跑」到「能断言」](#115-l3-mock-精细化从能跑到能断言)
+   - 11.6 [L3 测试状态管理：排序与隔离策略](#116-l3-测试状态管理排序与隔离策略)
+   - 11.7 [子模块 .install() 模式的测试策略](#117-子模块-install-模式的测试策略)
+   - 11.8 [L3 测试用例设计模式](#118-l3-测试用例设计模式)
+   - 11.9 [L3 实战数据](#119-l3-实战数据集卡大亨宝藏猎人)
+   - 11.10 [L4 端到端实战数据（彩墨迷境）](#1110-l4-端到端实战数据彩墨迷境)
+   - 11.11 [Lua 5.4 兼容性陷阱：math.pow 不存在](#1111-lua-54-兼容性陷阱mathpow-不存在)
+   - 11.12 [模块内部重算覆盖直接赋值](#1112-模块内部重算覆盖直接赋值)
+   - 11.13 [全局共享数据污染与备份恢复](#1113-全局共享数据污染与备份恢复)
+   - 11.14 [L3-L4 环境隔离策略](#1114-l3-l4-环境隔离策略)
+   - 11.15 [无 UI 库的轻量 Mock 策略](#1115-无-ui-库的轻量-mock-策略)
+   - 11.16 [探针注入模式：闭包函数 vs Start() 包装](#1116-探针注入模式闭包函数-vs-start-包装)
+12. [Headless 截图自动化（AI 视觉 QA）](#12-headless-截图自动化ai-视觉-qa) ← NEW
+13. [效率定位：各工具对比](#13-效率定位各工具对比)
+14. [接入新项目指南](#14-接入新项目指南)
+15. [参考文件](#15-参考文件)
+
+---
+
+## 1. 概述
+
+本指南覆盖 UrhoX Lua 项目的**五层质量保障工具链**，按成本从低到高排列：
+
+```
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ ① LSP 静态   │ │ ② 分辨率扫描 │ │ ③ Dry-Run    │ │ ④ Headless   │ │ ⑤ 预览窗口   │
+│   诊断       │ │              │ │   沙箱       │ │   截图       │ │              │
+│              │ │ resolution_  │ │ wasmoon      │ │ Puppeteer +  │ │ 真实引擎     │
+│ lua-language-│ │ scan.sh      │ │ L1-L4        │ │ SwiftShader  │ │ 人工验收     │
+│ server       │ │              │ │              │ │              │ │              │
+│ 5-10秒       │ │ 秒级         │ │ 15秒         │ │ 30-60秒      │ │ 1-5 分钟     │
+│ 类型/nil     │ │ 硬编码溢出   │ │ 加载→逻辑    │ │ 渲染截图     │ │ 视觉/交互    │
+└──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
+   第零道门禁      第一道门禁       第二道门禁       第三道门禁       最终验收
+```
+
+### 各工具定位
+
+| 工具 | 原理 | 捕获什么 | 不能捕获什么 |
+|------|------|---------|-------------|
+| **LSP 静态诊断** | lua-language-server `--check` 全量类型推导 | 类型错误、nil 访问、未定义变量、未使用变量 | 运行时逻辑、Mock 依赖问题 |
+| **分辨率扫描** | Bash 文本匹配硬编码像素值 | UI 绝对值溢出风险 | 动态计算、百分比嵌套溢出 |
+| **Dry-Run 沙箱** | wasmoon + Mock 引擎，无 GPU 执行 Lua | 加载崩溃、接口缺失、业务逻辑错误、流程断裂 | 渲染、性能、触控交互 |
+| **Headless 截图** | Puppeteer + SwiftShader 软件 WebGL | 真实渲染输出、引擎初始化错误、UI 布局问题 | 触控交互、性能（软件渲染不代表真机） |
+| **预览窗口** | 真实 UrhoX 引擎运行 | 视觉效果、交互体验、性能 | — （最终验收） |
+
+### Dry-Run 沙箱核心原理
+
+- 使用 [wasmoon](https://github.com/nickmccurdy/wasmoon)（Lua 5.4 编译为 WASM）作为运行时
+- 通过 Mock 引擎 API 替代真实的 UrhoX 引擎调用
+- 在无 GPU/无浏览器环境下执行游戏逻辑，捕获运行时错误
+
+**适用场景**：
+- CI/CD 流水线中的自动化回归测试
+- AI Agent 开发流程中的质量门禁
+- 开发者本地快速验证（比启动引擎快 10x）
+
+**核心优势**：
+- **零依赖**：只需 `npm install wasmoon`，不需要图形环境
+- **自适应**：自动分析项目结构，动态生成测试用例（L1-L2）
+- **可复用**：同一套 mock_engine.lua + 测试脚本可直接用于不同项目
+
+---
+
+## 2. 测试前必读：选择测试级别
+
+> **每次测试前，AI 必须向用户展示以下表格，让用户选择测试级别。**
+> 不同级别的 token 消耗和时间成本差异巨大，盲目执行高级别测试会浪费资源。
+
+### 级别速览
+
+| 级别 | 名称 | 验证什么 | 能发现什么 Bug | 不能发现什么 |
+|------|------|----------|---------------|-------------|
+| **L1** | 冒烟测试 | 模块加载 + Start() 执行 | 语法错误、require 路径错误、nil 引用、方法缺失 | 业务逻辑错误 |
+| **L2** | 结构验证 | L1 + 界面注册 + 系统接口 + 帧模拟 | 界面导航异常、系统接口缺失、Update 循环崩溃 | 游戏规则错误 |
+| **L3** | 业务逻辑 | L2 + 状态变更断言 + 游戏规则验证 | 资金计算错误、状态流转异常、边界条件 Bug | 视觉/交互体验问题 |
+| **L4** | 端到端 | L3 + 完整玩家流程模拟 | 流程断裂、多系统联动错误 | 渲染、性能、网络问题 |
+
+### 成本对比
+
+| 级别 | AI Token 消耗 | 预计时间 | Mock 维护成本 | 适用场景 |
+|------|:---:|:---:|:---:|------|
+| **L1** | 低 | 1-3 分钟 | 零（已有 mock 直接跑） | 代码改动后快速验证、CI 门禁 |
+| **L2** | 低-中 | 3-5 分钟 | 低（偶尔补 mock） | 功能开发完成后、重构后验证 |
+| **L3** | **高** | 10-30 分钟 | **高**（需手写测试用例） | 核心系统修改后、交付前 |
+| **L4** | **很高** | 30-60 分钟 | **很高**（用例+mock 双重维护） | 大版本发布前、全面回归 |
+
+### AI 交互模板
+
+测试前，AI 应向用户展示：
+
+```
+准备运行 Dry-Run 沙箱测试。请选择测试级别：
+
+  L1 冒烟测试 — 验证代码能加载和启动（约 1-3 分钟）
+  L2 结构验证 — 额外验证界面、系统接口、帧模拟（约 3-5 分钟）
+  L3 业务逻辑 — 需要针对具体功能编写测试用例（约 10-30 分钟）
+  L4 端到端   — 完整玩家流程模拟（约 30-60 分钟）
+
+推荐：日常开发用 L1-L2，核心功能修改后用 L3。
+
+请选择级别（输入 1/2/3/4，默认 L2）：
+```
+
+### 选择建议
+
+| 场景 | 推荐级别 | 原因 |
+|------|---------|------|
+| "帮我跑一下测试" / "检查一下代码" | **L2** | 性价比最高，覆盖加载+结构 |
+| "刚改了一个 bug，验证一下" | **L1** | 快速确认没有引入新的语法/加载错误 |
+| "改了资金计算逻辑，帮我验证" | **L3** | 需要针对资金逻辑编写断言 |
+| "大版本完成了，全面测一下" | **L3-L4** | 先 L2 确认结构，再 L3 验证核心逻辑 |
+| "第一次接入测试框架" | **L2** | 先确保基础设施可用 |
+
+---
+
+## 3. 环境准备
+
+```bash
+# 安装运行时（唯一依赖）
+npm install wasmoon
+
+# 验证安装
+node -e "const {LuaFactory} = require('wasmoon'); new LuaFactory().createEngine().then(l => { l.doString('print(\"Lua 5.4 OK\")'); l.global.close(); })"
+```
+
+**项目文件结构**（约定）：
+
+```
+project/
+├── scripts/           # 游戏 Lua 源码
+│   ├── main.lua       # 入口（含 function Start()）
+│   ├── ui/            # 页面/界面模块
+│   ├── systems/       # 系统模块
+│   ├── core/          # 核心模块（EventBus, GameState 等）
+│   └── data/          # 数据配置
+├── docs/
+│   └── qa/            # 测试报告输出目录
+│       └── dry-run-report.md
+└── test/              # 测试脚本
+    ├── mock_engine.lua     # Mock 引擎 API
+    └── dry_run_adaptive.js # 自适应测试脚本（L1-L2 自动化）
+```
+
+---
+
+## 4. 技术架构
+
+```
+┌─────────────────────────────────────────────────┐
+│  Node.js (wasmoon)                              │
+│                                                 │
+│  ┌─────────────────────────────────────────┐    │
+│  │  Lua 5.4 WASM Sandbox                   │    │
+│  │                                         │    │
+│  │  mock_engine.lua                        │    │
+│  │  ├── MockObj (深度 metatable 代理)      │    │
+│  │  ├── CallableTable (构造器+命名空间)    │    │
+│  │  ├── 引擎全局变量 (scene, renderer...) │    │
+│  │  ├── NanoVG 函数 (nvgRect, nvgText...) │    │
+│  │  ├── 引擎常量 (KEY_*, MOUSEB_*, BT_*) │    │
+│  │  ├── UI 库深度 Mock (Widget 链式方法)  │    │
+│  │  ├── require 拦截 (urhox-libs → Mock)  │    │
+│  │  ├── 事件捕获系统 (SubscribeToEvent)   │    │
+│  │  ├── Widget 注册表 (查找/点击/遍历)   │    │
+│  │  ├── 日志断言 API (_AssertLog*/Count) │    │
+│  │  └── 测试运行器 (_RunTest/_GetSummary)│    │
+│  │                                         │    │
+│  │  用户脚本 (via package.preload 注入)    │    │
+│  │  ├── core/*.lua, data/*.lua             │    │
+│  │  ├── systems/*.lua                      │    │
+│  │  ├── ui/*.lua                           │    │
+│  │  └── main.lua                           │    │
+│  └─────────────────────────────────────────┘    │
+│                                                 │
+│  Node.js fs.readFileSync → doString 注入        │
+│  pcall 错误捕获 → 结构化 QA 报告               │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. Mock 引擎 API
+
+### 5.1 三层 Mock 策略
+
+| 层级 | Mock 对象 | 策略 | 覆盖范围 |
+|------|-----------|------|----------|
+| 通用层 | `MockObj(name)` | 深度 metatable 代理，任意属性/方法返回新 MockObj | scene, renderer, cache 等 |
+| 构造器层 | `CallableTable(name, fn)` | 既是构造函数又是命名空间 | `Vector3(1,2,3)` + `Vector3.UP` |
+| 精细层 | `RegisteredMockWidget` | 带真实方法签名 + 自动注册到 Widget 注册表 | UI 组件链式调用 |
+
+### 5.2 文件注入（绕过 WASM 文件系统隔离）
+
+wasmoon 的 Lua VM 无法直接 `loadfile()`，需要 Node.js 侧读取后注入：
+
+```javascript
+const code = fs.readFileSync(filePath, 'utf8');
+await lua.doString(
+    'package.preload["' + moduleName + '"] = function(...)\n' + code + '\nend'
+);
+```
+
+### 5.3 Local 变量探针注入
+
+Lua 模块级 `local` 变量对外部 `doString` 不可见。解决方案 — 在 main.lua 注入时追加探针代码：
+
+```javascript
+if (moduleName === 'main') {
+    code += '\nlocal _origStart = Start\n';
+    code += 'function Start()\n    _origStart()\n';
+    code += '    _G.pageManager_ = pageManager_\n';
+    code += '    _G.gameState_ = gameState_\n';
+    code += 'end\n';
+}
+```
+
+探针列表应根据项目的 main.lua 中实际声明的 `local` 变量动态生成。
+
+### 5.4 事件捕获系统
+
+```lua
+-- SubscribeToEvent 被改造为捕获模式
+local _eventHandlers = {}
+
+SubscribeToEvent = function(arg1, arg2, arg3)
+    local eventName, handler
+    if arg3 then
+        eventName, handler = arg2, arg3
+    else
+        eventName, handler = arg1, arg2
+    end
+    _eventHandlers[eventName] = _eventHandlers[eventName] or {}
+    table.insert(_eventHandlers[eventName], {
+        handler = handler,
+        isString = type(handler) == "string"
+    })
+end
+
+-- 合成事件触发
+function _FireEvent(eventName, data)
+    local handlers = _eventHandlers[eventName]
+    if not handlers then return end
+    local ed = MockEventData(data or {})
+    for _, entry in ipairs(handlers) do
+        if entry.isString then
+            _G[entry.handler](eventName, ed)
+        else
+            entry.handler(eventName, ed)
+        end
+    end
+end
+
+-- 模拟 N 帧更新
+function _SimulateFrames(n, dt)
+    for i = 1, n do
+        _FireEvent("Update", { TimeStep = dt or 0.016 })
+    end
+end
+```
+
+### 5.5 UI Widget Mock 方法清单
+
+Mock Widget 必须包含以下方法，否则 UI 代码运行时会崩溃：
+
+| 方法 | 说明 | 实战踩坑 |
+|------|------|----------|
+| `AddChild(child)` | 添加子控件 | ScreenManager 依赖 |
+| `RemoveChild(child)` | 移除子控件 | Screen pop 时依赖 |
+| `RemoveAllChildren()` | 清空子控件 | navigateTo 时依赖 |
+| `Hide()` / `Show()` | 显示/隐藏 | TitleScreen 公告点 |
+| `FindById(id)` | 递归搜索子控件 | TitleScreen 动态修改 |
+| `FindChild(name, recursive)` | 按名称查找 | 通用查找需求 |
+| `SetVisible(v)` / `IsVisible()` | 可见性 | 条件渲染 |
+| `SetEnabled(v)` / `IsEnabled()` | 启用状态 | 按钮禁用 |
+| `SetText(t)` / `GetText()` | 文本操作 | Label/Button 文本 |
+
+> **教训**：每次 `Start()` 报 `attempt to call a nil value (method 'XXX')` 时，几乎都是 Widget mock 缺少某个方法。优先在 Widget 上补方法，而不是改游戏代码。
+
+### 5.6 测试基础设施 API
+
+```lua
+-- 日志断言
+_AssertLogContains("pattern")       -- 至少一行包含 pattern
+_AssertLogNotContains("ERROR")      -- 无匹配行
+_AssertNoErrors()                   -- 快捷方式
+_CountLogs("pattern")               -- 匹配行数
+_ClearLogs()                        -- 清空（测试间隔离）
+
+-- 值断言
+_AssertEqual(actual, expected, msg)  -- 精确相等
+_AssertTruthy(value, msg)            -- 非 nil / 非 false
+_AssertInRange(value, lo, hi, msg)   -- 范围检查
+_DeepEqual(tableA, tableB)           -- 深度表比较
+
+-- 状态快照
+local before = _SnapshotState(obj)
+local after  = _SnapshotState(obj)
+local changes = _CompareSnapshots(before, after)
+
+-- 测试运行器
+_RunTest("测试名称", function()
+    -- 需要日志隔离时手动调用:
+    _ClearLogs()
+    -- ... 测试逻辑 ...
+end)
+print(_GetTestSummary())
+```
+
+> **注意**：`_RunTest` **不会**自动清空日志。需要日志隔离的测试应在函数开头手动调用 `_ClearLogs()`。这是因为 Start() 阶段的日志需要在后续测试中可断言。
+
+---
+
+## 6. 测试层级详解
+
+### 重要：按"能发现什么 Bug"分级
+
+测试层级按**发现 Bug 的能力**递进，而非按技术手段分。每一层在前一层基础上增加验证深度。
+
+### 6.1 L1 冒烟测试 — 加载 + 启动
+
+**目标**：验证所有模块能正确加载，`Start()` 能无崩溃执行。
+
+**验证内容**：
+
+```
+Phase 1: PRELOAD  → 语法级验证（能否解析为 Lua chunk）
+Phase 2: REQUIRE  → 模块级验证（能否执行顶层代码、依赖链完整）
+Phase 3: START()  → 初始化验证（Start 函数能否无崩溃执行）
+```
+
+**能发现的 Bug**：
+
+| 错误类型 | 示例 |
+|----------|------|
+| 模块加载失败 | `require("data.config")` 路径错误 |
+| nil 值访问 | `attempt to index a nil value` |
+| 类型错误 | `attempt to call a table value` |
+| 方法缺失 | `attempt to call a nil value (method 'XXX')` |
+| 初始化顺序错误 | 依赖模块未先加载 |
+| Start() 执行崩溃 | 初始化逻辑中的运行时异常 |
+
+**不能发现的 Bug**：业务逻辑错误、游戏规则错误、界面导航异常、状态计算错误。
+
+**这一层已被自适应测试框架完全自动化**（见第 7 节）。
+
+### 6.2 L2 结构验证 — 界面注册 + 系统接口 + 帧模拟
+
+**目标**：在 L1 基础上验证项目结构完整性 — 界面是否注册、系统是否有正确接口、帧更新是否稳定。
+
+**新增验证内容**：
+
+| 验证维度 | 说明 |
+|----------|------|
+| 界面注册完整性 | 所有 ScreenManager.register 的界面能成功创建 |
+| 界面导航基础操作 | navigateTo / push / pop 不崩溃 |
+| 系统模块接口 | 每个系统加载后有 init 方法（如约定） |
+| 帧更新稳定性 | 60 帧 Update 无崩溃 |
+| Widget 创建 | UI 组件能正常创建和注册 |
+| 核心模块接口 | GameState/EventBus/TimeManager 等有预期方法 |
+
+**能发现的 Bug**：界面创建崩溃、系统接口缺失、Update 循环中的空引用、Widget 创建异常。
+
+**不能发现的 Bug**：游戏规则是否正确（比如资金计算对不对）、状态流转是否符合设计。
+
+**这一层已被自适应测试框架完全自动化**（见第 7 节）。
+
+### 6.3 L3 业务逻辑 — 状态变更 + 规则断言 + 回归用例
+
+**目标**：验证具体的游戏业务规则。**这是真正能发现游戏 Bug 的层级。**
+
+> **关键区别**：L1-L2 只验证"代码能不能跑"，L3 验证"代码跑得对不对"。
+> L3 需要 AI 或开发者根据具体业务逻辑**手写测试用例**，无法完全自动化。
+
+**测试用例编写模式**：
+
+```lua
+-- 示例 1：验证资金操作
+_RunTest("资金不足时不能招募员工", function()
+    local GameState = require("core.GameState")
+    GameState.reset()
+    -- 只留 100 资金
+    local initialFunds = GameState.getFunds()
+    GameState.modifyFunds(-initialFunds + 100, "测试清零")
+    _AssertEqual(GameState.getFunds(), 100, "初始资金 100")
+
+    -- 尝试招募一个薪资 > 100 的员工（需要根据实际逻辑调用）
+    local EmployeeSystem = require("systems.EmployeeSystem")
+    -- ... 调用招募接口 ...
+    -- _AssertEqual(GameState.getFunds(), 100, "资金未变，招募被拒绝")
+end)
+
+-- 示例 2：验证项目收入计算
+_RunTest("项目完成后收入正确入账", function()
+    local GameState = require("core.GameState")
+    local ProjectSystem = require("systems.ProjectSystem")
+    GameState.reset()
+    local before = GameState.getFunds()
+
+    -- 模拟项目完成
+    -- ... 创建项目 → 推进到完成 → 触发结算 ...
+
+    local after = GameState.getFunds()
+    _AssertTruthy(after > before, "项目完成后资金增加")
+end)
+
+-- 示例 3：回归测试 — 针对 devlog 中记录的历史 Bug
+_RunTest("回归：菜单快速双击不会重复 push", function()
+    local ScreenManager = require("ui.ScreenManager")
+    ScreenManager.navigateTo("main")
+    ScreenManager.push("menu")
+    -- 模拟快速双击：再次 push menu
+    local result = ScreenManager.push("menu")
+    _AssertTruthy(not result, "重复 push 被拒绝")
+end)
+```
+
+**L3 测试用例来源**：
+
+| 来源 | 说明 |
+|------|------|
+| 需求规格 | "资金不足时应该拒绝招募" |
+| devlog 历史 Bug | "Session 84: 菜单残留 Bug" → 编写回归测试 |
+| 边界条件 | 资金为 0、员工为空、项目数量满等 |
+| AI 代码审查 | 读代码发现可疑逻辑 → 编写验证用例 |
+| 公式验证 | Config 中的计算公式（声望、熟练度等级等） |
+| 模式差异 | 同一操作在不同游戏模式下的行为差异 |
+
+**L3 用例编写实战流程（AI 推荐）**：
+
+
+
+**不要测什么**（L3 的 ROI 陷阱）：
+
+| 不建议测 | 原因 | 替代方案 |
+|----------|------|---------|
+| UI 组件创建/布局 | Mock Widget 无真实布局，断言无意义 | 预览窗口 |
+| 渲染/动画效果 | 无 GPU，无法验证 | 真机测试 |
+| 随机数相关逻辑 | 结果不确定，断言会随机失败 | 固定种子或统计验证 |
+| 第三方 API 回调 | 网络被 Mock，无法触发真实回调 | 集成测试 |
+
+### 6.4 L4 端到端 — 完整玩家流程模拟
+
+**目标**：模拟一个完整的玩家游戏流程，验证多系统联动。
+
+> **成本最高**：需要 mock 大量交互细节，编写长流程用例。
+> 仅建议在大版本发布前使用。
+
+```lua
+_RunTest("完整流程：新游戏到第一个项目完成", function()
+    -- 1. 重置状态
+    local GameState = require("core.GameState")
+    local ScreenManager = require("ui.ScreenManager")
+    GameState.reset()
+
+    -- 2. 模拟开始新游戏
+    ScreenManager.navigateTo("newgame")
+    GameState.setCompanyName("测试公司")
+    GameState.startPlaying()
+
+    -- 3. 进入主界面
+    ScreenManager.navigateTo("main")
+    _AssertTruthy(GameState.isPlaying(), "游戏已开始")
+
+    -- 4. 创建项目
+    -- ... 调用 ProjectSystem 接口 ...
+
+    -- 5. 模拟时间推进 (N 个 Update)
+    _SimulateFrames(300, 0.016)
+
+    -- 6. 验证项目进度
+    -- ... 断言项目状态变化 ...
+end)
+```
+
+---
+
+## 7. 自适应测试框架（L1-L2 自动化）
+
+自适应测试框架自动完成 L1 和 L2 的全部验证，无需手写任何测试用例。
+
+### 四阶段流水线
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐
+│ Phase 1     │    │ Phase 2     │    │ Phase 3     │    │ Phase 4         │
+│ 项目分析    │───▶│ 测试生成    │───▶│ 测试执行    │───▶│ 报告输出        │
+│             │    │             │    │             │    │                 │
+│ • 扫描模块  │    │ • 模块加载  │    │ • wasmoon   │    │ • docs/qa/      │
+│ • 检测界面  │    │ • 界面导航  │    │   执行全部  │    │   dry-run-      │
+│ • 发现事件  │    │ • 系统接口  │    │   测试用例  │    │   report.md     │
+│ • 识别系统  │    │ • 帧模拟    │    │             │    │                 │
+│ • 统计onClick│   │ • Widget    │    │             │    │ • 项目元信息    │
+└─────────────┘    └─────────────┘    └─────────────┘    │ • 测试结果表    │
+                                                         │ • 失败详情      │
+                                                         │ • 覆盖率统计    │
+                                                         └─────────────────┘
+```
+
+### Phase 1: 项目分析
+
+扫描 `scripts/` 目录，自动识别：
+
+| 检测项 | 方法 | 示例输出 |
+|--------|------|----------|
+| 模块列表 | 递归扫描 `.lua` 文件 | `main, ui.ScreenManager, systems.SaveSystem` |
+| 界面注册 | 正则匹配 `ScreenManager.register("name"` | `title, main, settings` |
+| 事件订阅 | 匹配 `SubscribeToEvent` | `Update, InputFocus` |
+| onClick 处理器 | 匹配 `onClick` 出现次数 | `116 across 29 files` |
+| 系统模块 | `systems/` 目录下文件 | `SaveSystem, ProjectSystem, ...` |
+| 入口模块 | 检测含 `function Start()` 的文件 | `main` |
+
+### Phase 2: 测试自动生成
+
+根据分析结果动态生成测试用例：
+
+| 检测到的特征 | 自动生成的测试 | 层级 |
+|-------------|---------------|------|
+| N 个模块 | T-LOAD: 模块加载测试 | L1 |
+| 存在 `Start()` | T-START: 入口执行 + T-PROBE: 探针注入 | L1 |
+| M 个界面 | T-SCREEN-NAV: 界面导航 + T-STACK-OPS: push/pop | L2 |
+| onClick > 0 | T-WIDGET-REG: Widget 注册表检查 | L2 |
+| GameState 存在 | T-GAMESTATE-*: 加载/重置/资金操作 | L2 |
+| EventBus 存在 | T-EVENTBUS: 发布/订阅验证 | L2 |
+| TimeManager 存在 | T-TIMEMANAGER: 接口验证 | L2 |
+| K 个系统 | T-SYS-*: 每个系统的加载和接口验证 | L2 |
+| 任何项目 | T-FRAMES: 60 帧模拟 + T-CLEANUP: 清理验证 | L2 |
+
+测试集随项目结构自动扩缩 — 简单项目 ~10 条，复杂项目 30+ 条。
+
+### 运行命令
+
+```bash
+cd project-root
+node test/dry_run_adaptive.js
+```
+
+### 实战数据
+
+**项目 A：游戏开发工作室模拟器（L1-L2 全自动）**
+
+| 指标 | 数值 |
+|------|------|
+| 模块数 | 67 |
+| 界面数 | 25 |
+| 系统数 | 23 |
+| 自动生成测试数 | 36 |
+| 最终结果 | **36/36 ALL PASS** |
+| 首次运行结果 | 33/36（3 个失败均为 mock 缺失） |
+| 修复轮次 | 4 轮（Variant → File → Hide → FindById） |
+| Widget 创建数 | 46 |
+| 总耗时 | ~15 秒（不含 AI 分析和修复时间） |
+
+**项目 B：集卡大亨：宝藏猎人（L3 手写业务逻辑）**
+
+| 指标 | 数值 |
+|------|------|
+| 模块数 | 45 |
+| 系统数 | 13 |
+| L1 冒烟测试 | 6（自动） |
+| L2 事件驱动测试 | 4（自动） |
+| L3 业务逻辑测试 | 20（手写） |
+| L3 覆盖业务模块 | 12 |
+| 总测试数 | 30 |
+| 最终结果 | **30/30 ALL PASS** |
+| Mock 补丁数 | 3（File 构造器 + FILE 常量 + cjson 功能化） |
+| 测试执行耗时 | ~20ms |
+| AI 用例编写耗时 | ~15 分钟（含代码分析） |
+
+---
+
+## 8. 检测能力与局限性
+
+### 8.1 各层级检测能力对比
+
+| 验证维度 | L1 冒烟 | L2 结构 | L3 业务 | L4 端到端 |
+|----------|:------:|:------:|:------:|:--------:|
+| 语法错误 | ✅ | ✅ | ✅ | ✅ |
+| require 路径错误 | ✅ | ✅ | ✅ | ✅ |
+| nil 引用 / 类型错误 | ✅ | ✅ | ✅ | ✅ |
+| Start() 崩溃 | ✅ | ✅ | ✅ | ✅ |
+| 界面导航异常 | ❌ | ✅ | ✅ | ✅ |
+| 系统接口缺失 | ❌ | ✅ | ✅ | ✅ |
+| Update 循环崩溃 | ❌ | ✅ | ✅ | ✅ |
+| Widget 创建异常 | ❌ | ✅ | ✅ | ✅ |
+| **游戏规则/计算错误** | ❌ | ❌ | **✅** | ✅ |
+| **状态流转异常** | ❌ | ❌ | **✅** | ✅ |
+| **边界条件 Bug** | ❌ | ❌ | **✅** | ✅ |
+| **多系统联动错误** | ❌ | ❌ | ❌ | **✅** |
+| 自动化程度 | 全自动 | 全自动 | 手写用例 | 手写用例 |
+
+### 8.2 永远不能发现的问题
+
+| 局限 | 说明 | 缓解策略 |
+|------|------|----------|
+| 渲染正确性 | 无 GPU，无法验证视觉效果 | 需要真机预览 |
+| 性能问题 | WASM 沙箱性能不代表真实环境 | 需要真机 profiling |
+| 网络/异步 | 无法模拟网络请求和回调 | 仅验证同步逻辑 |
+| 触控/手势 | 无法模拟多点触控等复杂输入 | 需要真机测试 |
+| 音频播放 | Sound/Music 被完全 mock | 仅验证调用是否报错 |
+
+### 8.3 Mock 精度警告
+
+| 情况 | 真实引擎 | Mock 行为 | 影响 |
+|------|---------|-----------|------|
+| `cache:GetResource()` | 返回真实资源或 nil | 返回 MockObj | 无法测试"资源缺失"场景 |
+| `fileSystem:FileExists()` | 检查真实文件 | 返回 MockObj (truthy) | 文件存在性判断永远为 true |
+| UI 布局计算 | Yoga 引擎实际计算 | 无实际计算 | 无法测试布局溢出 |
+| 物理碰撞 | Box2D 计算 | 无物理模拟 | 无法测试碰撞逻辑 |
+
+---
+
+## 9. lua-language-server 静态诊断（第零道门禁） ← NEW
+
+> **零运行成本、零 Mock 配置**：直接利用项目已有的 `.emmylua/` 类型定义，对全部 Lua 文件做类型推导和静态分析。
+> 5-10 秒出结果，**建议作为每次代码修改后的第一步检查**。
+
+### 9.1 为什么引入 LSP 静态诊断？
+
+Dry-Run L1（冒烟测试）需要 wasmoon + mock_engine.lua，有一定配置成本。而 lua-language-server 的 `--check` CLI 模式可以**零配置**完成大部分 L1 能发现的问题——甚至更多：
+
+| 检测能力 | Dry-Run L1 | LSP --check |
+|----------|:---:|:---:|
+| 语法错误 | ✅ | ✅ |
+| require 路径错误 | ✅ | ✅ |
+| nil 值访问 | ✅（运行时崩溃） | ✅（静态推导） |
+| 方法名拼写错误 | ✅（运行时崩溃） | ✅（undefined-field） |
+| 未使用变量 | ❌ | ✅ |
+| 类型不匹配 | ❌ | ✅ |
+| 参数数量错误 | ❌ | ✅ |
+| 需要 wasmoon | ✅ | ❌ |
+| 需要 mock_engine | ✅ | ❌ |
+| 利用 .emmylua 类型定义 | ❌ | ✅ |
+
+**结论**：LSP 诊断覆盖了 L1 的大部分检测能力，且额外提供类型推导能力，应作为 Dry-Run 之前的第零道门禁。
+
+### 9.2 使用方式
+
+#### 命令行直接调用
+
+```bash
+# 基本用法：检查整个项目
+lua-language-server --check /path/to/project/scripts
+
+# 指定诊断级别（默认 Warning）
+lua-language-server --check /path/to/project/scripts --checklevel=Warning
+
+# 输出 JSON 格式（便于 CI 解析）
+lua-language-server --check /path/to/project/scripts --check_format=json
+
+# 指定日志目录（查看详细诊断）
+lua-language-server --check /path/to/project/scripts --logpath=/tmp/lsp-log
+```
+
+#### 诊断级别
+
+| --checklevel | 包含的诊断 | 推荐场景 |
+|:---:|----------|---------|
+| `Error` | 仅语法错误、致命类型错误 | 快速门禁 |
+| `Warning` | + 未使用变量、nil 可能访问、类型不匹配 | **日常推荐** |
+| `Information` | + 代码风格建议 | 代码审查 |
+| `Hint` | + 全部提示 | 深度扫描 |
+
+### 9.3 与项目集成：.luarc.json 配置
+
+在项目根目录创建 `.luarc.json`，让 LSP 识别 UrhoX 引擎的类型定义和全局变量：
+
+```json
+{
+    "workspace": {
+        "library": [
+            ".emmylua"
+        ]
+    },
+    "diagnostics": {
+        "globals": [
+            "vg", "scene_", "cameraNode_",
+            "SubscribeToEvent", "SendEvent"
+        ],
+        "severity": {
+            "unused-local": "Warning",
+            "undefined-global": "Warning",
+            "undefined-field": "Warning"
+        }
+    },
+    "runtime": {
+        "version": "Lua 5.4"
+    }
+}
+```
+
+**关键配置说明**：
+- `workspace.library`：指向 `.emmylua/` 目录，LSP 自动加载所有 `*.d.lua` 类型定义（177 个事件 + 引擎 API）
+- `diagnostics.globals`：声明引擎注入的全局变量，避免 `undefined-global` 误报
+- `runtime.version`：指定 Lua 5.4，确保诊断规则匹配引擎实际版本
+
+### 9.4 典型诊断输出示例
+
+```
+scripts/systems/CombatSystem.lua:45:23
+  warning: undefined-field `getHp`
+  → 对象类型 `GameState` 没有 `getHp` 字段（应为 `getHP`）
+
+scripts/ui/ShopScreen.lua:112:5
+  warning: unused-local `oldPrice`
+  → 局部变量 `oldPrice` 已赋值但从未使用
+
+scripts/core/EventBus.lua:28:12
+  warning: param-type-mismatch
+  → 参数 #2 期望 `function`，实际传入 `string`
+```
+
+### 9.5 与 Dry-Run 的分工
+
+```
+LSP --check（第零道门禁）
+  ├─ 覆盖：类型错误、nil 访问、拼写错误、未使用变量
+  ├─ 优势：零配置、极速、利用类型定义
+  └─ 盲区：运行时逻辑、Mock 依赖链、业务规则
+      ↓
+Dry-Run L1-L2（第二道门禁）
+  ├─ 覆盖：模块加载链、Start() 初始化、界面导航、帧模拟
+  ├─ 优势：真实执行 Lua 代码，捕获运行时崩溃
+  └─ 盲区：需要 Mock 维护，有配置成本
+      ↓
+Dry-Run L3-L4（深度验证，按需使用）
+  ├─ 覆盖：业务逻辑、状态流转、端到端流程
+  └─ 盲区：需要手写用例，ROI 需要评估
+      ↓
+Headless 截图（第三道门禁，见 §12）
+  ├─ 覆盖：真实渲染输出、UI 布局、引擎初始化完整性
+  ├─ 优势：AI 可直接读取截图，无需人工截图
+  └─ 盲区：无交互能力、软件渲染性能不代表真机
+```
+
+**实践建议**：
+- **每次代码修改后**：先跑 LSP `--check`（5-10 秒），修复所有 Warning
+- **功能开发完成后**：再跑 Dry-Run L1-L2（15 秒），确认运行时无崩溃
+- **核心逻辑修改后**：按需跑 L3，验证业务规则
+- **需要视觉验证时**：跑 Headless 截图（30-60 秒），AI 自动分析渲染结果
+
+### 9.6 CI/CD 集成示例
+
+```yaml
+# .github/workflows/qa.yml
+jobs:
+  lua-qa:
+    steps:
+      - name: LSP Static Check
+        run: |
+          lua-language-server --check scripts/ --checklevel=Warning --check_format=json > lsp-report.json
+          # 检查是否有 Error 级别诊断
+          if jq -e '.[] | select(.severity == 1)' lsp-report.json > /dev/null 2>&1; then
+            echo "❌ LSP 发现 Error 级别问题"
+            exit 1
+          fi
+
+      - name: Resolution Scan
+        run: bash test/resolution_scan.sh scripts/ 360 640
+
+      - name: Dry-Run L1-L2
+        run: node test/dry_run_adaptive.js
+
+      - name: Headless Screenshot QA
+        run: |
+          cd test/qa-tools
+          bash setup.sh
+          LD_LIBRARY_PATH=$HOME/.local/lib:$LD_LIBRARY_PATH \
+            node screenshot-qa.js --wait=25 --shots=1
+          # 检查是否有关键错误
+          if [ $(jq '.errorCount' screenshots/report.json) -gt 0 ]; then
+            echo "❌ Headless 截图发现 JS 错误"
+            exit 1
+          fi
+```
+
+---
+
+## 10. 多分辨率安全扫描（静态分析）
+
+> **零运行成本**：纯文本扫描，不需要 wasmoon，不需要执行任何 Lua 代码。
+> 目标：在常见目标分辨率下，检测 UI 硬编码尺寸是否可能溢出屏幕。
+
+### 10.1 为什么不能在沙箱里模拟布局？
+
+Dry-Run 沙箱的 UI Mock 是空壳 — `UI.Panel{}` 返回 MockObj，**不会执行 Yoga Flexbox 布局计算**。这意味着：
+
+| 能力 | Dry-Run 沙箱 | 真实引擎 |
+|------|:---:|:---:|
+| 检测 UI 代码是否崩溃 | ✅ | ✅ |
+| 检测控件是否被创建 | ✅ | ✅ |
+| **检测控件是否超出屏幕** | ❌ | ✅ |
+| **检测布局挤压/重叠** | ❌ | ✅ |
+
+因此，分辨率相关的检测采用**静态分析**（扫描源码文本），而非运行时模拟。
+
+### 10.2 扫描目标
+
+检测 UI 代码中的**绝对像素值**，判断是否可能在小屏/低分辨率设备上溢出。
+
+**常见目标分辨率**：
+
+| 设备类型 | 逻辑分辨率 | 物理分辨率 (DPR=2) | 说明 |
+|----------|-----------|-------------------|------|
+| 低端手机 | 360×640 | 720×1280 | 最低安全线 |
+| 主流手机 | 375×667 | 750×1334 | iPhone 6/7/8 |
+| 大屏手机 | 414×896 | 828×1792 | iPhone 11 |
+| 平板 | 768×1024 | 1536×2048 | iPad |
+| 桌面 | 1920×1080 | — | PC 基准 |
+
+### 10.3 扫描规则
+
+对 `scripts/` 下所有 `.lua` 文件执行文本匹配：
+
+```
+规则 1: 绝对宽度检测
+  匹配: width = <number>（排除 width = "100%" 等百分比值）
+  告警条件: number > 最小目标宽度 × 阈值（如 360 × 0.9 = 324）
+
+规则 2: 绝对高度检测
+  匹配: height = <number>
+  告警条件: number > 最小目标高度 × 阈值（如 640 × 0.9 = 576）
+
+规则 3: 字号过大检测
+  匹配: fontSize = <number>
+  告警条件: number > 48（在低分辨率下可能导致文字溢出容器）
+
+规则 4: 绝对定位检测
+  匹配: left = <number>, top = <number>, position = "absolute"
+  告警条件: 绝对定位的值 + 控件宽/高 超过屏幕边界
+
+规则 5: 横向子元素累加
+  匹配: flexDirection = "row" 容器中多个子元素的 width 之和
+  告警条件: 累加值 > 最小目标宽度（无 flexShrink 时会溢出）
+```
+
+### 10.4 扫描脚本示例
+
+```bash
+#!/bin/bash
+# resolution_scan.sh — UI 硬编码分辨率安全扫描
+# 用法: bash resolution_scan.sh [scripts_dir] [min_width] [min_height]
+
+SCRIPTS_DIR="${1:-scripts}"
+MIN_W="${2:-360}"
+MIN_H="${3:-640}"
+THRESHOLD=0.9
+MAX_W=$(echo "$MIN_W * $THRESHOLD" | bc | cut -d. -f1)
+MAX_H=$(echo "$MIN_H * $THRESHOLD" | bc | cut -d. -f1)
+MAX_FONT=48
+ISSUES=0
+
+echo "=== 多分辨率安全扫描 ==="
+echo "最小目标: ${MIN_W}×${MIN_H}, 告警阈值: ${MAX_W}×${MAX_H}"
+echo ""
+
+# 规则 1 & 2: 绝对宽高
+while IFS=: read -r file line content; do
+    # 提取 width = <number> (非百分比)
+    if echo "$content" | grep -qP 'width\s*=\s*\d+'; then
+        val=$(echo "$content" | grep -oP 'width\s*=\s*\K\d+')
+        if [ "$val" -gt "$MAX_W" ] 2>/dev/null; then
+            echo "⚠️  [宽度溢出风险] $file:$line — width=$val (>${MAX_W})"
+            echo "    $content"
+            ISSUES=$((ISSUES + 1))
+        fi
+    fi
+    if echo "$content" | grep -qP 'height\s*=\s*\d+'; then
+        val=$(echo "$content" | grep -oP 'height\s*=\s*\K\d+')
+        if [ "$val" -gt "$MAX_H" ] 2>/dev/null; then
+            echo "⚠️  [高度溢出风险] $file:$line — height=$val (>${MAX_H})"
+            echo "    $content"
+            ISSUES=$((ISSUES + 1))
+        fi
+    fi
+done < <(grep -rnP '(width|height)\s*=\s*\d+' "$SCRIPTS_DIR" --include="*.lua")
+
+# 规则 3: 字号过大
+while IFS=: read -r file line content; do
+    val=$(echo "$content" | grep -oP 'fontSize\s*=\s*\K\d+')
+    if [ "$val" -gt "$MAX_FONT" ] 2>/dev/null; then
+        echo "⚠️  [字号过大] $file:$line — fontSize=$val (>${MAX_FONT})"
+        echo "    $content"
+        ISSUES=$((ISSUES + 1))
+    fi
+done < <(grep -rnP 'fontSize\s*=\s*\d+' "$SCRIPTS_DIR" --include="*.lua")
+
+echo ""
+if [ "$ISSUES" -eq 0 ]; then
+    echo "✅ 扫描完成，未发现分辨率安全问题"
+else
+    echo "⚠️  发现 $ISSUES 个潜在问题，建议："
+    echo "   - 将绝对值改为百分比（width = \"80%\"）"
+    echo "   - 使用 math.min(value, screenWidth * ratio) 限制最大值"
+    echo "   - 添加 flexShrink = 1 允许收缩"
+fi
+```
+
+### 10.5 扫描局限
+
+| 局限 | 说明 |
+|------|------|
+| 假阳性 | 容器内使用 `flexShrink=1` 时绝对值不会溢出，但扫描仍会告警 |
+| 假阴性 | 百分比嵌套多层后实际像素可能溢出，静态分析无法追踪 |
+| 动态值 | `width = screenW * 0.5` 这类运行时计算无法静态评估 |
+| 组合溢出 | 单个控件不超但多个并排总和超出，需要更复杂的分析 |
+
+**定位**：静态扫描是**快速门禁**，能以零成本捕获明显的硬编码问题。复杂布局问题仍需真机预览验证。
+
+### 10.6 集成到测试流程
+
+```
+代码修改后
+  ↓
+① lua-language-server --check   ← 零配置，5-10秒（见 §9）
+  ↓
+② bash resolution_scan.sh       ← 零成本，秒级完成
+  ↓
+③ node test/dry_run_adaptive.js  ← L1-L2，~15秒
+  ↓
+④ node screenshot-qa.js          ← Headless 截图，30-60秒（见 §12）
+  ↓
+⑤ 预览窗口                      ← 视觉/交互最终验收
+```
+
+LSP 静态诊断作为第零道门禁，分辨率扫描作为第一道防线，均在 Dry-Run 之前运行。Headless 截图作为第三道门禁，在 Dry-Run 之后、预览窗口之前运行。
+
+---
+
+## 11. 实战踩坑记录
+
+> 基于两次完整测试接入的实战经验：
+> - **第一次（L1-L2）**：67 模块 / 25 界面 / 23 系统（游戏开发工作室模拟器），全自动化
+> - **第二次（L3）**：45 模块 / 13 系统（集卡大亨：宝藏猎人），手写 20 个业务逻辑用例
+
+### 11.1 Mock 缺失导致的级联失败
+
+**现象**：`Start()` 报错 → TitleScreen 创建失败 → 界面栈为空 → 界面导航测试全部失败。
+
+**根因链**：
+```
+TitleScreen.create()
+  → UI.Panel{...}          ← OK（mock 有）
+  → announcementDot_:Hide() ← FAIL（mock Widget 没有 Hide 方法）
+  → ScreenManager pcall 捕获错误，界面创建失败
+  → ScreenManager 回退到 title，但 title 就是当前失败的界面
+  → 界面栈为空
+  → T-SCREEN-NAV: getCurrentScreen() == nil → FAIL
+  → T-STACK-OPS: initial == nil → push 后 pop 无效 → FAIL
+```
+
+**教训**：一个 mock 方法缺失可以导致 3-5 个测试同时失败。修复时优先找**根因**（最先报错的那个），不要逐个测试修。
+
+### 11.2 WASM 内存越界
+
+**现象**：收集测试结果时，逐条调用 `lua.doString()` 读取 `_TestResults[i]`，到第 14 条时报 `RuntimeError: memory access out of bounds`。
+
+**原因**：wasmoon 的 WASM 实例有内存限制，频繁的 JS↔Lua 边界跨越会累积内存压力。
+
+**解决方案**：在单次 Lua 调用中将所有结果序列化为 JSON 字符串，然后在 JS 侧 `JSON.parse()`：
+
+```javascript
+const jsonStr = await lua.doString(`
+    local lines = {}
+    for i, r in ipairs(_TestResults) do
+        local err = r.error or ""
+        err = err:gsub('"', '\\\\"'):gsub('\\n', '\\\\n')
+        table.insert(lines, string.format(
+            '{"name":"%s","pass":%s,"error":"%s"}',
+            r.name:gsub('"', '\\\\"'), tostring(r.pass), err
+        ))
+    end
+    return "[" .. table.concat(lines, ",") .. "]"
+`);
+testResults = JSON.parse(jsonStr || '[]');
+```
+
+**规则**：尽量减少 JS↔Lua 的 doString 调用次数，用批量操作替代循环调用。
+
+### 11.3 `_RunTest` 不应自动清空日志
+
+**现象**：T-START 测试检查 `_AssertLogContains("M1")`，但日志已被清空，断言失败。
+
+**原因**：`_RunTest` 每次执行前自动调用 `_ClearLogs()`，把 Start() 阶段的日志清掉了。
+
+**解决方案**：移除自动清空，让需要日志隔离的测试自行调用 `_ClearLogs()`。
+
+### 11.4 常见需要补充的 Mock 清单
+
+首次接入时，以下 mock 经常缺失：
+
+| 缺失项 | 报错特征 | 补充位置 |
+|--------|---------|---------|
+| `Variant` 构造器 | `attempt to call a nil value (global 'Variant')` | CallableTable 构造器区域 |
+| `File` 构造器 | `attempt to call a nil value (global 'File')` | 需要 Open/Close/ReadString/WriteString |
+| `FILE_READ` / `FILE_WRITE` | `attempt to index a nil value` | 引擎常量区域 |
+| Widget `Hide()`/`Show()` | `attempt to call a nil value (method 'Hide')` | createMockWidget 函数 |
+| Widget `FindById(id)` | `attempt to call a nil value (method 'FindById')` | createMockWidget 函数，需递归搜索 |
+| `clientScore` API | `attempt to call a table value (local 'callback')` | require 拦截器区域（非致命，pcall 捕获） |
+
+---
+
+### 11.5 L3 Mock 精细化：从「能跑」到「能断言」
+
+> **L1-L2 的 Mock 只需要不崩溃，L3 的 Mock 需要行为正确。**
+
+L1-L2 测试中， 深度代理返回 truthy 值即可通过。但 L3 需要断言**具体返回值**，这意味着被断言路径上的 Mock 必须有真实行为。
+
+**本次 L3 必须精细化的 3 个 Mock**：
+
+| Mock 对象 | L1-L2 状态 | L3 需要的行为 | 为什么 |
+|-----------|-----------|-------------|--------|
+|  构造器 |  (truthy) | 真实的  |  用  判断存档是否成功 |
+| / 常量 | 不存在 |  |  传入构造器参数 |
+|  编解码 |  返回  | 真实 ,  |  通过 JSON 序列化/反序列化存档数据，L3 需要验证存取后数据正确 |
+
+**原则**：只精细化**被 L3 断言链触达的 Mock**，其余保持  兜底。
+
+
+
+**cjson 精细化**的关键在于  — 简易实现可用  将 JSON 转为 Lua 表：
+
+
+
+### 11.6 L3 测试状态管理：排序与隔离策略
+
+> **L3 测试的最大挑战不是写断言，而是管理测试间的状态依赖。**
+
+游戏状态分两层：
+- **（局内状态）**：每次  清空（金钱、刮卡数、天赋效果等）
+- **（局外状态）**：跨局持久化（声望、升级等级、总局数等），只有  能清空
+
+这意味着：
+
+| 测试类型 | 状态依赖 | 隔离方法 |
+|----------|---------|---------|
+| 纯函数测试（Config.CalcPrestige） | 无状态 | 无需隔离，随意放 |
+| 局内状态测试（金钱、破产、天赋） | 依赖  | 每个测试前  |
+| 局外状态测试（声望、Meta 升级） | 依赖  | 按依赖链排序，或用  |
+| 跨局测试（结算→升级→折扣） | 同时依赖两层 | **必须按特定顺序执行** |
+
+**本次采用的排序策略**：
+
+
+
+**关键教训**：Phase 3 的依赖链是脆弱的 — 如果  失败，后续 3 个测试会因缺少声望而全部跳过或失败。解决方案是在测试内部做声望不足检测，自动补充：
+
+
+
+### 11.7 子模块  模式的测试策略
+
+> 适用于 GameState 门面模式 + 子模块安装的项目架构。
+
+本项目的 GameState 采用门面模式：核心 （局内）和 （局外）是模块级 local 变量，子模块通过  获取闭包引用。
+
+**问题**：测试无法直接访问  和 ，只能通过公共 API 间接验证。
+
+**解决方案**：
+
+| 验证目标 | 不可行的方式 | 可行的方式 |
+|----------|------------|-----------|
+|  值 | （外部不可见） |  |
+|  值 | （外部不可见） |  |
+| 折扣效果 | 直接检查  |  后断言实际扣款 |
+| 天赋效果叠加 | 直接检查  |  后断言加成后金额 |
+
+**例外**： 返回  的直接引用（用于 UI 读取）。可用于：
+- 读取 、 等持久数据
+- 设置测试前置条件（如 ）
+
+** 是测试隔离的关键函数** — 它来自 SaveSystem 子模块，会重置整个 meta 表到初始值。没有它，L3 测试的 meta 依赖链将不可控。
+
+### 11.8 L3 测试用例设计模式
+
+基于本次 20 个用例的经验，归纳 4 种 L3 用例设计模式：
+
+**模式 A：纯函数验证（最简单）**
+
+
+
+**模式 B：单关注点状态测试（最常用）**
+
+
+
+**模式 C：状态累积链（需要排序）**
+
+
+
+**模式 D：多模式切换测试**
+
+
+
+### 11.9 L3 实战数据（集卡大亨：宝藏猎人）
+
+| 指标 | 数值 |
+|------|------|
+| 模块数 | 45 |
+| 系统数 | 13 |
+| 入口模块 | main |
+| L1 冒烟测试 | 6 |
+| L2 事件驱动测试 | 4 |
+| **L3 业务逻辑测试** | **20** |
+| L3 覆盖业务模块 | 12（资金/破产/声望/熟练度/连刮/天赋/安慰/里程碑/挑战/街机/结算/Meta升级） |
+| 总测试数 | 30 |
+| **首次运行结果** | **30/30 ALL PASS** |
+| Mock 补丁数 | 3（File 构造器 + FILE 常量 + cjson 功能化） |
+| 测试执行耗时 | ~20ms（不含 AI 分析和用例编写时间） |
+| AI 用例编写耗时 | ~15 分钟（分析代码 + 编写 20 个用例 + 修补 Mock） |
+| 用例编写策略 | 先分析 5 个核心模块 API → 识别可测试公共方法 → 按依赖排序编写 |
+
+**与 L1-L2 对比**：
+
+| 维度 | L1-L2（第一个项目） | L3（第二个项目） |
+|------|-------------------|-----------------|
+| 测试用例 | 36 条（全自动生成） | 30 条（10 自动 + 20 手写） |
+| Mock 修复轮次 | 4 轮（运行时发现） | 1 轮（预先分析代码补全） |
+| 发现的问题类型 | 加载崩溃、接口缺失 | 可验证：公式计算、状态流转、边界条件 |
+| ROI | 高（零用例编写成本） | 中-高（用例编写有成本，但覆盖了 L1-L2 无法发现的逻辑错误） |
+
+
+### 11.10 L4 端到端实战数据（彩墨迷境）
+
+> **首次 L4 端到端测试实战**。项目特点：纯 NanoVG 渲染（无 UI 库）、伪 3D 光线投射引擎（DDA Raycasting，375 条射线，FOV 72°）、16 个 Lua 模块。
+
+| 指标 | 数值 |
+|------|------|
+| 项目 | 彩墨迷境（Chromatic Sketch World） |
+| 模块数 | 16（含 main + 14 子模块 + 1 区域配置） |
+| 渲染管线 | 纯 NanoVG（50+ 矢量绘图函数），无 Widget/ScreenManager |
+| 核心引擎 | DDA Raycasting 伪 3D（375 rays, FOV 72°） |
+| L1 冒烟测试 | 4 |
+| L2 结构验证 | 4 |
+| **L3 业务逻辑** | **30** |
+| **L4 端到端** | **21** |
+| **总测试数** | **59** |
+| **最终结果** | **59/59 ALL PASS (100%)** |
+| Mock 函数数 | 50+（NanoVG）+ 引擎全局 + 构造器 |
+| 模块注入方式 | `package.preload` 字符串注入（绕过 WASM 文件系统隔离） |
+| **发现真实 Bug** | **1 个 — `math.pow` Lua 5.4 兼容性问题（HIGH 严重度）** |
+| 测试执行耗时 | ~25ms（不含 AI 分析时间） |
+
+**与前两次实战对比**：
+
+| 维度 | L1-L2（项目一：67模块） | L3（项目二：45模块） | L4（项目三：16模块） |
+|------|----------------------|---------------------|---------------------|
+| 测试用例 | 36 条（全自动） | 30 条（10 自动 + 20 手写） | 59 条（8 自动 + 51 手写） |
+| 测试层级 | L1-L2 | L1-L3 | **L1-L4（首次全层级）** |
+| Mock 修复轮次 | 4 轮 | 1 轮 | 2 轮（NanoVG 50+ 函数 + `math.pow` 兼容） |
+| 发现问题类型 | 加载崩溃、接口缺失 | 公式计算、状态流转 | **运行时崩溃 Bug（已修复提交）** |
+| ROI | 高（零编写成本） | 中-高 | **极高（发现了预览窗口难以触发的通关后崩溃）** |
+
+**L4 的独特价值**：L4 端到端测试模拟完整玩家流程（启动 → 移动 → 解谜 → 通关），在第 59 个测试中触发了一个只有通关后才出现的 `math.pow` 崩溃。这类 Bug 在预览窗口中需要手动打通整个游戏才能发现。
+
+
+### 11.11 Lua 5.4 兼容性陷阱：math.pow 不存在
+
+> **真实 Bug 报告 — BUG-001**：由 L4 端到端测试发现并修复。
+
+**问题**：`math.pow` 在 Lua 5.4 中已被移除（Lua 5.3 废弃，5.4 彻底删除）。UrhoX 引擎可能提供了兼容 polyfill，但 wasmoon 使用原版 Lua 5.4，因此 `math.pow` 为 `nil`。
+
+**错误信息**：
+```
+ui/MessageSystem.lua:78: attempt to call a nil value (field 'pow')
+```
+
+**触发条件**：游戏通关后，MessageSystem 渲染弹性缩放动画时调用 `math.pow`。由于需要完成所有谜题才能触发胜利条件，预览窗口中很难快速复现。
+
+**修复**：
+```lua
+-- ❌ 错误（Lua 5.4 不存在 math.pow）
+elasticS = 1.0 - math.pow(1.0 - s, 3) * (1.0 + 2.2 * (1.0 - s))
+
+-- ✅ 正确（使用 ^ 运算符，所有 Lua 版本通用）
+elasticS = 1.0 - ((1.0 - s) ^ 3) * (1.0 + 2.2 * (1.0 - s))
+```
+
+**经验教训**：
+- **wasmoon 使用原版 Lua 5.4**，没有引擎的兼容层。凡是引擎提供了 polyfill 的函数（如 `math.pow`），在 Dry-Run 中都可能暴露
+- **建议**：在 mock_engine.lua 中**不要**补 `math.pow` polyfill，让它自然报错——这是 Dry-Run 的检测价值所在
+- **排查方法**：`grep -rn "math\.pow" scripts/` 全局扫描一次即可
+
+
+### 11.12 模块内部重算覆盖直接赋值
+
+**问题**：在 L4 测试中，直接赋值 `player.currentZone = 5` 后调用 `Player.Update()`，Update 内部根据 `(x, y)` 坐标重新计算 `currentZone`，覆盖了直接赋值。
+
+**错误表现**：
+```javascript
+// ❌ 错误：直接赋值被 Update() 内部重算覆盖
+player.currentZone = 5;   // 赋值为 5
+Player.Update(dt);         // 内部根据 (x,y) 重算 → currentZone 变回旧值
+```
+
+**修复**：
+```javascript
+// ✅ 正确：设置实际坐标，让 Update() 自然计算出期望的 zone
+player.x = 21.5;   // Zone 5 的实际坐标
+player.y = 14.5;
+Player.Update(dt);  // 内部计算 → currentZone = 5 ✓
+```
+
+**通用规则**：
+- **在 L3/L4 测试中，不要直接赋值"派生字段"**（由其他字段计算得出的字段）
+- **应该赋值"源字段"**，让模块内部逻辑自然推导出期望结果
+- 类似案例：不要直接设 `score`，而是触发得分事件；不要直接设 `isGameOver`，而是制造游戏结束条件
+
+
+### 11.13 全局共享数据污染与备份恢复
+
+**问题**：彩墨迷境的 `ZoneConfig.MAP` 是一个全局二维数组，`UnlockDoor()` 会永久修改 MAP 数据（将门格子改为通道）。如果多个测试用例依赖初始 MAP 状态，后续测试会因为 MAP 已被修改而失败。
+
+**解决方案 — 备份/恢复模式**：
+```javascript
+// 测试组开始前：深拷贝保存初始状态
+const mapBackup = lua.doStringSync(`
+    local ZC = require("ZoneConfig")
+    local backup = {}
+    for y = 1, #ZC.MAP do
+        backup[y] = {}
+        for x = 1, #ZC.MAP[y] do
+            backup[y][x] = ZC.MAP[y][x]
+        end
+    end
+    _G._mapBackup = backup
+    return true
+`);
+
+// 每个测试用例结束后：恢复初始状态
+lua.doStringSync(`
+    local ZC = require("ZoneConfig")
+    for y = 1, #_G._mapBackup do
+        for x = 1, #_G._mapBackup[y] do
+            ZC.MAP[y][x] = _G._mapBackup[y][x]
+        end
+    end
+`);
+```
+
+**通用规则**：
+- 识别哪些全局/模块级数据会被测试修改（MAP、配置表、单例状态）
+- 在测试组开始前做深拷贝备份
+- 每个测试用例结束后恢复，确保测试间无副作用
+- 优先在 Lua 侧做备份恢复（避免 JS↔Lua 序列化开销）
+
+
+### 11.14 L3-L4 环境隔离策略
+
+**问题**：L1-L2 可以共享一个 Lua 环境（只读操作），但 L3-L4 的业务逻辑测试会修改全局状态，需要隔离。
+
+**策略**：按测试组创建独立 Lua 环境。
+
+```javascript
+// L1-L2：共享环境（只读，无副作用）
+const sharedEnv = await createLuaEnv();
+runL1Tests(sharedEnv);
+runL2Tests(sharedEnv);
+
+// L3：按测试组隔离（每组独立环境）
+for (const group of l3TestGroups) {
+    const isolatedEnv = await createLuaEnv();  // 全新环境
+    for (const test of group.tests) {
+        runTest(isolatedEnv, test);
+    }
+    isolatedEnv.close();  // 释放资源
+}
+
+// L4：每个端到端流程独立环境
+for (const e2eTest of l4Tests) {
+    const freshEnv = await createLuaEnv();
+    runE2ETest(freshEnv, e2eTest);
+    freshEnv.close();
+}
+```
+
+**关键决策**：
+| 隔离粒度 | 优点 | 缺点 | 推荐场景 |
+|----------|------|------|---------|
+| 共享环境 | 快（只初始化一次） | 状态污染风险 | L1-L2 |
+| 按测试组隔离 | 组内可共享前置状态 | 需要识别组边界 | L3 |
+| 按用例隔离 | 完全无污染 | 慢（每次重建环境） | L4、关键回归用例 |
+
+**彩墨迷境实际采用**：L3 按功能组隔离（碰撞组、区域组、谜题组各自独立环境），L4 每个端到端流程独立环境。
+
+
+### 11.15 无 UI 库的轻量 Mock 策略
+
+**背景**：彩墨迷境没有使用 Widget/ScreenManager UI 框架，整个渲染管线基于 NanoVG 矢量绘图。这意味着不需要 mock 复杂的 UI 组件树，但需要 mock 50+ 个 NanoVG C API 函数。
+
+**NanoVG Mock 策略 — 批量空函数注册**：
+```lua
+-- mock_engine.lua 中：批量注册 NanoVG 空函数
+local nvgFunctions = {
+    "nvgBeginFrame", "nvgEndFrame", "nvgBeginPath", "nvgClosePath",
+    "nvgMoveTo", "nvgLineTo", "nvgArc", "nvgRect", "nvgRoundedRect",
+    "nvgCircle", "nvgEllipse", "nvgFill", "nvgStroke",
+    "nvgFillColor", "nvgStrokeColor", "nvgStrokeWidth",
+    "nvgFontFace", "nvgFontSize", "nvgText", "nvgTextAlign",
+    "nvgSave", "nvgRestore", "nvgTranslate", "nvgRotate", "nvgScale",
+    "nvgLinearGradient", "nvgBoxGradient", "nvgRadialGradient",
+    "nvgScissor", "nvgResetScissor", "nvgIntersectScissor",
+    "nvgGlobalAlpha", "nvgResetTransform",
+    -- ... 完整列表见 mock_engine.lua
+}
+for _, name in ipairs(nvgFunctions) do
+    _G[name] = function(...) end  -- 空函数，不崩溃即可
+end
+
+-- 需要返回值的函数单独处理
+_G.nvgCreateFont = function() return 1 end      -- 返回字体句柄
+_G.nvgTextBounds = function() return 0, 0, 100, 20 end  -- 返回文本边界
+_G.nvgRGBA = function(r,g,b,a) return {r=r,g=g,b=b,a=a or 255} end
+_G.nvgRGB = function(r,g,b) return {r=r,g=g,b=b,a=255} end
+```
+
+**与 UI 库项目的对比**：
+
+| 维度 | UI 库项目（集卡大亨） | NanoVG 项目（彩墨迷境） |
+|------|---------------------|----------------------|
+| Mock 复杂度 | 高（Widget 树、事件冒泡、布局） | 低（批量空函数） |
+| 需要 Mock 的函数数 | ~20 个核心 + 组件方法 | 50+ 个但全是简单函数 |
+| 状态断言方式 | 检查 Widget 属性 | 检查模块内部变量 |
+| 渲染验证 | 不可能（需要真实 UI 树） | 不可能（需要真实画布） |
+| 适合的测试层级 | L1-L3 | **L1-L4（端到端更容易）** |
+
+**结论**：NanoVG 项目反而更适合 Dry-Run 测试——渲染层只需要"不崩溃"，业务逻辑完全可以在无 GPU 环境中验证。
+
+
+### 11.16 探针注入模式：闭包函数 vs Start() 包装
+
+**问题**：Lua 模块中的 `local` 变量在外部不可访问，但测试需要检查这些变量的值。
+
+**方案 A：闭包探针函数（推荐）**
+
+在模块加载时，向源码末尾追加一个探针闭包，将 local 变量暴露到 `_G`：
+
+```javascript
+// JavaScript 侧：注入探针
+const mainSource = fs.readFileSync('scripts/main.lua', 'utf-8');
+const probeCode = `
+_G._probeMainLocals = function()
+    return {
+        player = player,          -- local player
+        renderer = renderer,      -- local renderer
+        gameState = gameState,    -- local gameState
+    }
+end
+`;
+const injectedSource = mainSource + '\n' + probeCode;
+
+// 注入到 package.preload
+lua.doStringSync(`
+    package.preload["main"] = function()
+        ${escapeLuaString(injectedSource)}
+    end
+`);
+```
+
+```javascript
+// 测试中使用探针
+const locals = lua.doStringSync(`
+    local p = _G._probeMainLocals()
+    return p.player.currentZone
+`);
+assert(locals === 5, "Player should be in zone 5");
+```
+
+**方案 B：Start() 包装（适合需要拦截初始化的场景）**
+
+```javascript
+// 包装 Start() 以在初始化后做额外操作
+lua.doStringSync(`
+    local _originalStart = Start
+    function Start()
+        _originalStart()
+        -- 初始化后的探针注入或状态检查
+        _G._gameInitialized = true
+    end
+`);
+```
+
+**选择指南**：
+
+| 场景 | 推荐方案 | 原因 |
+|------|---------|------|
+| 读取模块内部 local 变量 | 方案 A（闭包探针） | 直接访问闭包作用域 |
+| 拦截/验证初始化流程 | 方案 B（Start 包装） | 可以在初始化前后插入逻辑 |
+| 监控函数调用次数 | 方案 A + 计数器 | 在探针中返回调用计数 |
+| 需要替换子系统行为 | 方案 B + Mock 注入 | 在 Start() 前替换依赖 |
+
+
+## 12. Headless 截图自动化（AI 视觉 QA） ← NEW
+
+> **核心价值**：AI Agent 无需用户手动截图，即可直接获取游戏真实渲染画面进行视觉 QA。
+> 解决了"AI 看不到预览窗口"的根本痛点——用户不再需要逐个截图粘贴给 AI。
+
+### 12.1 为什么需要 Headless 截图？
+
+| 现有工具 | 能做什么 | 不能做什么 |
+|----------|---------|-----------|
+| LSP 静态诊断 | 类型错误、nil 访问 | 看不到画面 |
+| Dry-Run 沙箱 | 逻辑验证、加载检查 | 看不到画面（无 GPU、Mock 渲染） |
+| 预览窗口 | 真实渲染 | **需要用户手动截图**给 AI |
+
+**痛点**：用户需要反复截图→粘贴→等待 AI 分析→修改→再截图，流程繁琐且用户往往无法准确感知 UI 问题。
+
+**Headless 截图的解决方案**：
+
+```
+AI 修改代码 → build → Headless 截图（自动） → AI 分析截图 → 发现问题 → 修改代码
+     ↑                                                                    │
+     └────────────────── 全程无需用户介入 ──────────────────────────────────┘
+```
+
+### 12.2 技术原理
+
+UrhoX 游戏编译为 WASM，通过浏览器运行。Headless 截图利用这一架构：
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  screenshot-qa.js                                        │
+│                                                          │
+│  ┌────────────────┐    ┌─────────────────────────────┐   │
+│  │ Local HTTP     │    │ Headless Chromium            │   │
+│  │ Server         │    │ (Puppeteer 控制)             │   │
+│  │                │    │                             │   │
+│  │ • 服务 dist/   │◄──▶│ • SwiftShader 软件 WebGL    │   │
+│  │ • COOP/COEP    │    │ • SharedArrayBuffer 支持    │   │
+│  │   headers      │    │ • 自动截图 + 日志捕获       │   │
+│  │ • 端口 8091    │    │ • 引擎事件监控              │   │
+│  └────────────────┘    └─────────────────────────────┘   │
+│                                                          │
+│  输出:                                                   │
+│  ├── screenshots/shot-{1..N}.png   ← 游戏画面截图        │
+│  ├── screenshots/report.json       ← 结构化报告          │
+│  ├── screenshots/console.log       ← 完整控制台日志      │
+│  └── screenshots/errors.log        ← JS 错误（如有）     │
+└──────────────────────────────────────────────────────────┘
+```
+
+**关键技术决策**：
+
+| 挑战 | 解决方案 |
+|------|---------|
+| 无 GPU | Chrome `--use-gl=angle --use-angle=swiftshader` 软件渲染 |
+| SharedArrayBuffer 被禁 | 本地服务器添加 COOP/COEP HTTP 头 |
+| 无 sudo 安装系统库 | 从 Ubuntu .deb 包提取 .so 到 `~/.local/lib/` + `LD_LIBRARY_PATH` |
+| 无 Xvfb 显示服务 | Chrome `--headless=new` 模式无需显示服务 |
+| CDN 依赖（引擎 JS） | 引擎 JS 从 CDN 加载，需要网络代理支持 |
+
+### 12.3 安装
+
+**一键安装**（推荐）：
+
+```bash
+cd /workspace/test/qa-tools
+bash setup.sh
+```
+
+安装脚本自动完成：
+1. `npm install puppeteer`（自带 Chromium ~300MB）
+2. 检查 Chromium 缺失的系统库（约 10 个 .so）
+3. 从 Ubuntu 镜像下载 .deb 包并提取 .so 到 `~/.local/lib/`
+4. 验证 Chrome 可启动
+
+**手动安装**（如自动安装失败）：
+
+```bash
+# 1. 安装 Puppeteer
+cd /workspace/test/qa-tools
+export http_proxy=http://127.0.0.1:1080
+export https_proxy=http://127.0.0.1:1080
+npm install puppeteer
+
+# 2. 检查缺失库
+CHROME=$(node -e "console.log(require('puppeteer').executablePath())")
+ldd "$CHROME" | grep "not found"
+
+# 3. 如有缺失库，用 extract_debs.py 处理
+# 详见 test/qa-tools/setup.sh 源码
+```
+
+### 12.4 使用方法
+
+**基本用法**：
+
+```bash
+cd /workspace/test/qa-tools
+LD_LIBRARY_PATH=/home/Maker/.local/lib:$LD_LIBRARY_PATH \
+  node screenshot-qa.js
+```
+
+**完整参数**：
+
+```bash
+LD_LIBRARY_PATH=/home/Maker/.local/lib:$LD_LIBRARY_PATH \
+  node screenshot-qa.js \
+    --width=1280 \       # 视口宽度（默认 1280）
+    --height=720 \       # 视口高度（默认 720）
+    --wait=25 \          # 等待引擎加载秒数（默认 20）
+    --shots=3 \          # 截图数量（默认 3）
+    --interval=5 \       # 截图间隔秒数（默认 5）
+    --output=./screenshots \  # 输出目录
+    --port=8091 \        # 本地服务端口
+    --dist=/workspace/dist    # dist 目录路径
+```
+
+**参数选择建议**：
+
+| 场景 | 推荐参数 | 说明 |
+|------|---------|------|
+| 快速检查 UI 布局 | `--wait=20 --shots=1` | 单张截图，最快出结果 |
+| 验证动画/状态变化 | `--wait=25 --shots=3 --interval=5` | 多张截图观察变化 |
+| 测试不同分辨率 | `--width=375 --height=667` | 模拟手机屏幕 |
+| 竖屏游戏 | `--width=720 --height=1280` | 竖屏视口 |
+
+### 12.5 输出说明
+
+**report.json 结构**：
+
+```json
+{
+    "timestamp": "2026-03-22T10:35:20.676Z",
+    "viewport": { "width": 1280, "height": 720 },
+    "browserVersion": "Chrome/146.0.7680.153",
+    "screenshots": [
+        { "file": "shot-1.png", "size": 29760, "time": "..." },
+        { "file": "shot-2.png", "size": 29760, "time": "..." },
+        { "file": "shot-3.png", "size": 29760, "time": "..." }
+    ],
+    "engineEvents": [
+        "[UrhoX] ✓ Env: production",
+        "[UrhoX] ✓ Project: p_xxxx",
+        "[UrhoX] ✓ All files downloaded",
+        "[UrhoX] ✓ Engine JS executed",
+        "[UrhoX] === preRun ===",
+        "[UrhoX] Canvas size OK: 1280x720",
+        "INFO: Engine construct finish.",
+        "[UrhoX] === postRun: Engine ready ===",
+        "[UrhoX] Loading screen hidden"
+    ],
+    "errorCount": 0,
+    "errors": [],
+    "logCount": 223
+}
+```
+
+**AI 可以从报告中获取的信息**：
+
+| 信息 | 来源 | 用途 |
+|------|------|------|
+| 游戏画面 | `shot-*.png` 截图文件 | 视觉 QA：布局、颜色、元素位置 |
+| 引擎是否启动成功 | `engineEvents` | 判断初始化流程是否正常 |
+| JS 运行时错误 | `errors` + `errorCount` | 发现引擎/脚本崩溃 |
+| Lua 日志输出 | `console.log` 文件 | 分析游戏运行时行为 |
+| 截图文件大小 | `screenshots[].size` | 全黑/全白截图文件极小，说明渲染异常 |
+
+### 12.6 AI Agent 集成工作流
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  AI Agent 自动化 QA 循环                                     │
+│                                                              │
+│  1. 修改代码（scripts/*.lua）                                │
+│     ↓                                                        │
+│  2. 调用 UrhoX MCP build 工具                                │
+│     ↓                                                        │
+│  3. 运行 screenshot-qa.js                                    │
+│     ↓                                                        │
+│  4. 读取 report.json + 截图文件                              │
+│     ↓                                                        │
+│  5. AI 分析：                                                │
+│     ├── 截图是否全黑/全白？→ 引擎初始化失败                  │
+│     ├── engineEvents 是否完整？→ 检查缺失的启动步骤          │
+│     ├── errors 是否为空？→ 定位 JS/Lua 错误                  │
+│     ├── UI 布局是否正确？→ 视觉对比                          │
+│     └── console.log 有无 ERROR？→ 运行时异常                 │
+│     ↓                                                        │
+│  6. 发现问题 → 回到步骤 1 修复                               │
+│     无问题 → 交付给用户做最终人工验收                        │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 12.7 已知限制
+
+| 限制 | 说明 | 影响程度 |
+|------|------|---------|
+| **软件渲染性能低** | SwiftShader 比 GPU 慢 10-100x，不代表真机性能 | 中 — 只用于视觉检查，不做性能测试 |
+| **WebGL 兼容性警告** | `INVALID_ENUM: getInternalformatParameter` 大量警告 | 低 — 不影响渲染结果，已在脚本中过滤 |
+| **无触控/交互** | 只能截取静态画面，无法模拟点击/滑动 | 中 — 适合检查初始 UI 布局，不适合交互测试 |
+| **网络连接失败** | 多人游戏的服务器连接在 headless 环境下会失败 | 低 — 单机 UI 渲染正常，多人功能需真机测试 |
+| **首次启动较慢** | 引擎从 CDN 加载 JS + WASM 初始化需要 15-25 秒 | 低 — 只是等待时间 |
+| **依赖 CDN 网络** | 引擎 JS 从 CDN 加载，需要网络代理 | 中 — 离线环境不可用 |
+
+### 12.8 与其他工具的分工
+
+```
+Dry-Run 沙箱（第二道门禁）
+  ├─ 覆盖：模块加载、业务逻辑、状态流转
+  ├─ 优势：极快（15秒）、无渲染依赖
+  └─ 盲区：看不到真实画面
+      ↓
+Headless 截图（第三道门禁）← NEW
+  ├─ 覆盖：真实渲染输出、UI 布局、引擎初始化完整性
+  ├─ 优势：AI 可直接读取截图进行视觉分析，无需人工截图
+  └─ 盲区：无交互能力、软件渲染性能不代表真机
+      ↓
+预览窗口（最终验收）
+  ├─ 覆盖：交互体验、真机性能、触控操作
+  └─ 优势：完全真实的用户体验
+```
+
+### 12.9 文件清单
+
+| 文件 | 路径 | 用途 |
+|------|------|------|
+| `screenshot-qa.js` | `test/qa-tools/screenshot-qa.js` | 主截图工具 |
+| `setup.sh` | `test/qa-tools/setup.sh` | 一键安装脚本 |
+| `extract_debs.py` | `test/qa-tools/extract_debs.py` | .deb 库提取辅助工具 |
+| 系统库 | `~/.local/lib/*.so` | Chromium 依赖的系统库 |
+
+### 12.10 实战数据
+
+**首次验证（人生模拟器项目）**：
+
+| 指标 | 数值 |
+|------|------|
+| 项目 | 人生模拟器（project_id: p_qhod） |
+| 浏览器版本 | Chrome/146.0.7680.153 |
+| 视口 | 1280 x 720 |
+| 引擎初始化耗时 | ~20 秒 |
+| 截图数 | 3（间隔 5 秒） |
+| 引擎事件 | 12 个（全部成功） |
+| JS 错误 | 0 |
+| 控制台日志 | 223 条 |
+| 截图文件大小 | ~29KB（含真实渲染内容，2092 种颜色） |
+| 安装耗时 | ~3 分钟（含下载 Chromium + 提取库） |
+| 环境要求 | 无 GPU、无 sudo、无 Xvfb |
+
+---
+
+## 13. 效率定位：各工具对比
+
+> **诚实回答**：Dry-Run 不是预览窗口的替代品，它们解决不同层面的问题。
+> 如果 Dry-Run 不能比"开预览窗口跑一遍"更高效，那就不该用。
+
+### 13.1 什么时候 Dry-Run 比预览窗口更好？
+
+| 场景 | Dry-Run 优势 | 预览窗口优势 | 推荐 |
+|------|:---:|:---:|------|
+| 改了 5 个文件，确认没有引入加载错误 | ✅ 15 秒出结果 | ❌ 需要逐个页面点进去 | **Dry-Run L1-L2** |
+| 重构模块结构，验证 require 链完整性 | ✅ 自动扫描所有模块 | ❌ 手动点不到的页面可能漏掉 | **Dry-Run L1** |
+| 检查 UI 硬编码是否在小屏上溢出 | ✅ 静态扫描秒级完成 | ❌ 需要切换多个分辨率逐一检查 | **分辨率扫描** |
+| CI/CD 流水线自动化门禁 | ✅ 无人值守 | ❌ 需要人盯着 | **Dry-Run L1-L2** |
+| 验证按钮点击后资金是否正确扣减 | ⚠️ 需要手写 L3 用例 | ✅ 点一下就看到了 | **预览窗口** |
+| 检查动画是否流畅、颜色是否协调 | ❌ 完全无法验证 | ✅ 所见即所得 | **预览窗口** |
+| 测试手势操作、多点触控 | ❌ 无法模拟 | ✅ 真机直接测 | **预览窗口/真机** |
+
+### 13.2 Dry-Run 的真实价值定位
+
+```
+                                代码质量防线
+
+ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+ │ LSP 静态 │ │  分辨率  │ │ Dry-Run  │ │ Headless │ │ 预览窗口 │
+ │  诊断    │─▶ 静态扫描 │─▶ L1-L2    │─▶ 截图     │─▶ 人工验证 │
+ │          │ │          │ │          │ │          │ │          │
+ │ 5-10秒   │ │ 秒级     │ │ 15秒     │ │ 30-60秒  │ │ 1-5分钟  │
+ │ 类型推导 │ │ 纯文本   │ │ 自动化   │ │ AI 自动  │ │ 需要人   │
+ │          │ │          │ │          │ │          │ │          │
+ │ 捕获:    │ │ 捕获:    │ │ 捕获:    │ │ 捕获:    │ │ 捕获:    │
+ │ 类型错误 │ │ 硬编码   │ │ 加载崩溃 │ │ 渲染异常 │ │ 交互Bug  │
+ │ nil访问  │ │ 溢出风险 │ │ 接口缺失 │ │ UI布局   │ │ 性能问题 │
+ │ 未使用   │ │          │ │ 导航断裂 │ │ 初始化   │ │ 触控体验 │
+ └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘
+  第零道门禁   第一道门禁   第二道门禁   第三道门禁    最终验收
+```
+
+**核心原则**：每层工具都是**快速门禁**（guardrail），不是**替代品**（replacement）。
+
+- **L1-L2 是最佳性价比区间** — 全自动、15 秒、零测试编写成本
+- **L3 的 ROI 需要谨慎评估** — 手写测试用例的时间成本可能超过直接预览；只有在核心系统（资金计算、状态流转）需要**回归保护**时才值得投入
+- **L4 在特定场景下 ROI 极高** — 当游戏有长流程（需要通关才能触发的代码路径）时，L4 能发现预览窗口极难手动复现的 Bug（实证：彩墨迷境 `math.pow` 崩溃，见 §11.10-11.11）
+
+### 13.3 提升效率的具体建议
+
+| 瓶颈 | 原因 | 优化方案 |
+|------|------|---------|
+| 测试脚本编写慢 | L3 需要手写用例 | 日常只跑 L1-L2（自动），仅核心逻辑写 L3 |
+| 运行时间长 | wasmoon 启动 + 模块加载 | L1-L2 实测 ~15 秒，已经比启动预览快 |
+| Mock 维护成本高 | 每次新增 API 调用都可能缺 mock | 用 MockObj 深度代理兜底，只精细 mock 被断言的接口 |
+| 不确定该不该跑 | 不知道改动影响范围 | **只在代码修改后跑 L1-L2**，当作"编译检查"用 |
+
+### 13.4 决策流程图
+
+```
+代码修改完成
+  ↓
+改动涉及几个文件？
+  ├─ 1-2 个文件，改动很小 → lua-language-server --check（5-10秒）→ 预览窗口
+  └─ 3+ 个文件，或重构/新增模块
+      ↓
+      lua-language-server --check（5-10秒，§9）
+      ↓
+      bash resolution_scan.sh（秒级，§10）
+      ↓
+      node dry_run_adaptive.js（15秒，L1-L2）
+      ↓
+      ├─ 有失败 → 先修复，再继续
+      └─ ALL PASS
+          ↓
+      需要视觉验证？
+      ├─ 是 → node screenshot-qa.js（30-60秒，§12）→ AI 分析截图
+      │        ├─ 截图正常 → 交付 / 预览窗口做最终验收
+      │        └─ 截图异常 → 修复后重新截图
+      └─ 否 → 直接预览窗口
+```
+
+**记住**：不要为了跑测试而跑测试。如果改了一行颜色值，直接预览就好。但 LSP --check 成本极低（5-10 秒），建议任何改动后都先跑一次。Headless 截图适合 AI 需要自主验证渲染结果的场景。
+
+---
+
+## 14. 接入新项目指南
+
+### Step 1: 复制基础文件
+
+```
+mock_engine.lua         → test/mock_engine.lua
+dry_run_adaptive.js     → test/dry_run_adaptive.js
+```
+
+### Step 2: 调整路径配置
+
+在测试脚本中修改 `SCRIPTS_DIR` 指向新项目的 scripts 目录：
+
+```javascript
+const SCRIPTS_DIR = path.join(__dirname, '..', 'scripts');  // 根据项目结构调整
+const REPORT_DIR  = path.join(__dirname, '..', 'docs', 'qa');
+```
+
+### Step 3: 运行 L1-L2（先跑通自适应测试）
+
+```bash
+cd project-root
+node test/dry_run_adaptive.js
+```
+
+首次运行几乎一定会有 mock 缺失导致的失败。按以下流程修复：
+
+```
+运行测试
+  ↓
+看 Start() 是否成功
+  ↓
+├─ 成功 → 检查失败的测试，逐个修复
+└─ 失败 → 看错误信息 → 补充 mock → 重新运行
+  ↓
+循环直到 ALL PASS
+```
+
+### Step 4: 编写 L3 测试（可选）
+
+在 `dry_run_adaptive.js` 的 `generateTests()` 函数中添加项目特定的业务逻辑测试。
+
+### 自适应匹配规则
+
+| 项目特征 | 自动行为 |
+|----------|----------|
+| 有 ScreenManager + register | 生成界面导航测试 |
+| 有 GameState 类 | 生成状态操作测试 |
+| 有 EventBus 类 | 生成事件发布/订阅测试 |
+| 有 onClick 处理器 | 生成 Widget 注册表测试 |
+| 有 systems/ 目录 | 逐个验证系统加载和接口 |
+| 无以上特征 | 仅生成基础的模块加载 + Start() + 帧模拟测试 |
+
+---
+
+## 15. 参考文件
+
+| 文件 | 用途 |
+|------|------|
+| `test/mock_engine.lua` | Mock 引擎 API（所有层级共用） |
+| `test/dry_run_adaptive.js` | 自适应测试脚本（L1-L2 自动化） |
+| `test/qa-tools/screenshot-qa.js` | Headless 截图 QA 工具（§12） |
+| `test/qa-tools/setup.sh` | Headless 截图一键安装脚本 |
+| `test/qa-tools/extract_debs.py` | .deb 库提取辅助工具 |
+| `docs/qa/dry-run-report.md` | Dry-Run 测试报告（自动生成） |
+| `test/qa-tools/screenshots/report.json` | 截图 QA 报告（自动生成） |
+
+---
+
+*Version: 4.0*
+*Last Updated: 2026-03-22*
+*v4.0: 新增 Headless 截图自动化章节（§12），五层质量防线完整覆盖，AI Agent 可自主获取游戏渲染截图进行视觉 QA*
+*v3.0: 从"Dry-Run 沙箱测试指南"升级为"QA 工具链指南"，新增 lua-language-server 静态诊断章节，四层质量防线完整覆盖*
+*基于三次实战经验：L1-L2 全自动化（67模块项目）+ L3 手写业务逻辑（45模块项目）+ L4 端到端全层级（16模块项目，发现真实 Bug）*
