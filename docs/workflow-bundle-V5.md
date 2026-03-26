@@ -16,27 +16,31 @@
 **AI 收到指令后自动执行**：
 
 1. 读取本文件全部内容
-2. 按 `━━━ FILE: 路径 ━━━` 标记，逐个创建文件
-3. 创建 `docs/templates/` 目录和模板文件
+2. 创建 `docs/skills/` 和 `docs/templates/` 目录结构
+3. 按 `━━━ FILE: 路径 ━━━` 标记，逐个创建文件（所有文件均在 `docs/` 下）
 4. 验证部署完整性（检查所有文件是否创建成功）
 5. 向用户确认部署完成，进入工作流
+
+**🚫 部署禁忌（AI 必读）**：
+- **绝对不要写入 `.claude/` 目录**。该目录在 SCE/星火编辑器环境中是只读 tmpfs 挂载点，写入会静默失败，浪费 token。
+- 所有文件统一部署到 `docs/` 目录下，包括 `ai-workflow.md` 和 `skills/`。
+- 如果发现 `.claude/` 不可写，**不要尝试排查或修复权限**，直接使用 `docs/` 路径即可。
 
 **部署后的文件结构**：
 
 ```
 项目根目录/
-├── .claude/
-│   ├── CLAUDE.md                          ← 智能体准则（控制器）
-│   └── skills/
-│       ├── workflow-auto/SKILL.md         ← 工作流自动驾驶
-│       ├── self-reflect/SKILL.md          ← 代码质量复盘
-│       ├── memory/SKILL.md                ← 记忆维护（统一）
-│       ├── git-version/SKILL.md           ← 版本管理
-│       ├── web-search/SKILL.md            ← 联网搜索
-│       ├── art-asset/SKILL.md             ← 美术资源生成
-│       └── audio-asset/SKILL.md           ← 音频资源生成
 ├── docs/
 │   ├── workflow-bundle.md                 ← 本文件（种子，永久保留）
+│   ├── ai-workflow.md                 ← 智能体准则（控制器）
+│   ├── skills/
+│   │   ├── workflow-auto/SKILL.md         ← 工作流自动驾驶
+│   │   ├── self-reflect/SKILL.md          ← 代码质量复盘
+│   │   ├── memory/SKILL.md                ← 记忆维护（统一）
+│   │   ├── git-version/SKILL.md           ← 版本管理
+│   │   ├── web-search/SKILL.md            ← 联网搜索
+│   │   ├── art-asset/SKILL.md             ← 美术资源生成
+│   │   └── audio-asset/SKILL.md           ← 音频资源生成
 │   └── templates/
 │       ├── game-brief.md                  ← 游戏设计简报模板
 │       ├── system-contract.md             ← 系统契约模板
@@ -51,7 +55,7 @@
 
 | 层级 | 文件 | 可靠性 | 作用 |
 |------|------|--------|------|
-| 第 1 层 | `.claude/CLAUDE.md` + `skills/` | ⚠️ 可能失效 | 正常控制器 |
+| 第 1 层 | `docs/ai-workflow.md` + `docs/skills/` | ✅ 持久可靠 | 正常控制器 |
 | 第 2 层 | `docs/memory-index.md` | ✅ 持久可靠 | 恢复指引 |
 | 第 3 层 | `docs/workflow-bundle.md`（本文件） | ✅ 持久可靠 | 完整种子 |
 
@@ -91,7 +95,7 @@
 # ═══════════════════════════════════════════════════
 
 
-━━━ FILE: .claude/CLAUDE.md (追加到现有内容之后) ━━━
+━━━ FILE: docs/ai-workflow.md ━━━
 
 # 游戏开发搭档准则
 
@@ -308,12 +312,12 @@ audio-asset：用户要求音效/BGM/角色配音
 ━━━ END FILE ━━━
 
 
-━━━ FILE: .claude/skills/workflow-auto/SKILL.md ━━━
+━━━ FILE: docs/skills/workflow-auto/SKILL.md ━━━
 
 # Skill: 工作流自动驾驶
 
 > 负责阶段判断、项目初始化、阶段切换。
-> 日常 build 后的硬门槛流程由 CLAUDE.md 直接驱动，不经过本 skill。
+> 日常 build 后的硬门槛流程由 ai-workflow.md 直接驱动，不经过本 skill。
 
 ## 硬门槛绑定
 
@@ -328,13 +332,13 @@ audio-asset：用户要求音效/BGM/角色配音
 **Step 0：部署自检**
 
 检查以下文件是否全部存在：
-- `.claude/skills/workflow-auto/SKILL.md`
-- `.claude/skills/self-reflect/SKILL.md`
-- `.claude/skills/memory/SKILL.md`
-- `.claude/skills/git-version/SKILL.md`
-- `.claude/skills/web-search/SKILL.md`
-- `.claude/skills/art-asset/SKILL.md`
-- `.claude/skills/audio-asset/SKILL.md`
+- `docs/skills/workflow-auto/SKILL.md`
+- `docs/skills/self-reflect/SKILL.md`
+- `docs/skills/memory/SKILL.md`
+- `docs/skills/git-version/SKILL.md`
+- `docs/skills/web-search/SKILL.md`
+- `docs/skills/art-asset/SKILL.md`
+- `docs/skills/audio-asset/SKILL.md`
 - `docs/templates/game-brief.md`
 
 缺失任何一个 → 读取 `docs/workflow-bundle.md`，按标记创建缺失文件。
@@ -454,7 +458,7 @@ a) 🧪 系统测试  b) 🎮 手感打磨  c) 🎨 视觉美化  d) 🎵 加音
 ━━━ END FILE ━━━
 
 
-━━━ FILE: .claude/skills/self-reflect/SKILL.md ━━━
+━━━ FILE: docs/skills/self-reflect/SKILL.md ━━━
 
 # Skill: 自我复盘
 
@@ -513,7 +517,7 @@ a) 🧪 系统测试  b) 🎮 手感打磨  c) 🎨 视觉美化  d) 🎵 加音
 ━━━ END FILE ━━━
 
 
-━━━ FILE: .claude/skills/memory/SKILL.md ━━━
+━━━ FILE: docs/skills/memory/SKILL.md ━━━
 
 # Skill: 记忆维护（统一）
 
@@ -745,7 +749,7 @@ a) 🧪 系统测试  b) 🎮 手感打磨  c) 🎨 视觉美化  d) 🎵 加音
 ━━━ END FILE ━━━
 
 
-━━━ FILE: .claude/skills/git-version/SKILL.md ━━━
+━━━ FILE: docs/skills/git-version/SKILL.md ━━━
 
 # Skill: 版本管理
 
@@ -807,7 +811,7 @@ a) 🧪 系统测试  b) 🎮 手感打磨  c) 🎨 视觉美化  d) 🎵 加音
 ━━━ END FILE ━━━
 
 
-━━━ FILE: .claude/skills/web-search/SKILL.md ━━━
+━━━ FILE: docs/skills/web-search/SKILL.md ━━━
 
 # Skill: 联网搜索
 
@@ -849,7 +853,7 @@ a) 🧪 系统测试  b) 🎮 手感打磨  c) 🎨 视觉美化  d) 🎵 加音
 ━━━ END FILE ━━━
 
 
-━━━ FILE: .claude/skills/art-asset/SKILL.md ━━━
+━━━ FILE: docs/skills/art-asset/SKILL.md ━━━
 
 # Skill: 美术资源生成
 
@@ -915,7 +919,7 @@ assets/
 ━━━ END FILE ━━━
 
 
-━━━ FILE: .claude/skills/audio-asset/SKILL.md ━━━
+━━━ FILE: docs/skills/audio-asset/SKILL.md ━━━
 
 # Skill: 音频资源生成
 
@@ -1085,7 +1089,7 @@ assets/Sounds/
 
 <!-- RECOVERY INSTRUCTIONS -->
 <!-- 如果你是新会话的 AI，读到此文件但不记得工作流规则： -->
-<!-- 1. 检查 .claude/skills/ 目录是否存在 7 个 skill 文件 -->
+<!-- 1. 检查 docs/skills/ 目录是否存在 7 个 skill 文件 -->
 <!-- 2. 如果缺失 → 读取 docs/workflow-bundle.md，按 ━━━ FILE: ━━━ 标记重新创建 -->
 <!-- 3. 读取 docs/persona.md 加载人格 -->
 <!-- 4. 根据下方索引内容恢复项目上下文 -->
